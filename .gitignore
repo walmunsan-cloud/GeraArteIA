@@ -1,0 +1,43 @@
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+
+# Cache do Hugging Face
+.huggingface/
+W:\HuggingFace/
+models--*/
+hub/
+xet/
+
+# Modelos grandes
+models/
+*.safetensors
+*.ckpt
+*.bin
+*.pt
+*.pth
+
+# Imagens geradas
+outputs/*
+!outputs/.gitkeep
+
+# Arquivos temporários
+*.tmp
+*.log
+
+# Configurações locais
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db

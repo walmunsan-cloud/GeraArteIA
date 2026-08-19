@@ -1,44 +1,13 @@
-# Ambiente virtual
-.venv/
-venv/
-env/
-
-# Cache do Python
+﻿.venv/
 __pycache__/
-*.py[cod]
-
-# Cache do Hugging Face
-.huggingface/
-W:\HuggingFace/
-models--*/
-hub/
-xet/
-
-# Modelos grandes
-models/
-*.safetensors
-*.ckpt
-*.bin
-*.pt
-*.pth
-
-# Imagens geradas
-outputs/*
-!outputs/.gitkeep
-
-# Arquivos temporários
-*.tmp
+*.pyc
+*.pyo
+*.pyd
 *.log
-
-# Configurações locais
+erro_execucao.txt
+outputs/
+*.tmp
+*.temp
 .env
-.env.*
 
-# IDE
-.vscode/
-.idea/
-
-# Sistema operacional
-.DS_Store
-Thumbs.db
 GeraArteIA_backup/

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>GeraArteIA</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #111827;
+            color: #ffffff;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 42px;
+        }
+
+        .header p {
+            margin-top: 10px;
+            color: #9ca3af;
+            font-size: 17px;
+        }
+
+        .card {
+            background: #1f2937;
+            border-radius: 18px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            resize: vertical;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #374151;
+            background: #111827;
+            color: #ffffff;
+            font-size: 16px;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #60a5fa;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 18px;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            background: #2563eb;
+            color: white;
+            font-size: 17px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        button:disabled {
+            background: #4b5563;
+            cursor: wait;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 14px;
+            border-radius: 10px;
+            background: #111827;
+            color: #d1d5db;
+            display: none;
+        }
+
+        .resultado {
+            margin-top: 30px;
+            text-align: center;
+            display: none;
+        }
+
+        .resultado img {
+            max-width: 100%;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        .erro {
+            color: #fca5a5;
+        }
+
+        .sucesso {
+            color: #86efac;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>🎨 GeraArteIA</h1>
+
+        <p>
+            Geração de imagens por inteligência artificial
+        </p>
+    </div>
+
+    <div class="card">
+
+        <label for="prompt">
+            Descreva a imagem que deseja criar:
+        </label>
+
+        <textarea
+            id="prompt"
+            placeholder="Exemplo: Um cavalo marrom correndo em um campo verde ao pôr do sol, fotografia realista..."
+        ></textarea>
+
+        <button id="btnGerar" onclick="gerarImagem()">
+            ✨ Gerar imagem
+        </button>
+
+        <div id="status" class="status"></div>
+
+        <div id="resultado" class="resultado">
+
+            <h2>Imagem gerada</h2>
+
+            <img id="imagemGerada" src="" alt="Imagem gerada pelo GeraArteIA">
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+async function gerarImagem() {
+
+    const prompt = document.getElementById("prompt").value.trim();
+
+    const botao = document.getElementById("btnGerar");
+
+    const status = document.getElementById("status");
+
+    const resultado = document.getElementById("resultado");
+
+    const imagem = document.getElementById("imagemGerada");
+
+
+    if (!prompt) {
+
+        status.style.display = "block";
+
+        status.className = "status erro";
+
+        status.textContent = "Digite uma descrição para gerar a imagem.";
+
+        return;
+    }
+
+
+    botao.disabled = true;
+
+    botao.textContent = "⏳ Gerando imagem...";
+
+    status.style.display = "block";
+
+    status.className = "status";
+
+    status.textContent =
+        "Preparando o modelo de inteligência artificial...";
+
+    resultado.style.display = "none";
+
+
+    try {
+
+        const resposta = await fetch("/api/gerar", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                prompt: prompt
+            })
+
+        });
+
+
+        const dados = await resposta.json();
+
+
+        if (!resposta.ok) {
+
+            throw new Error(
+                dados.detail || "Erro ao gerar imagem."
+            );
+
+        }
+
+
+        imagem.src = dados.imagem + "?t=" + Date.now();
+
+        resultado.style.display = "block";
+
+        status.className = "status sucesso";
+
+        status.textContent =
+            "Imagem gerada com sucesso!";
+
+
+    } catch (erro) {
+
+        status.className = "status erro";
+
+        status.textContent =
+            "Erro: " + erro.message;
+
+    }
+
+
+    botao.disabled = false;
+
+    botao.textContent = "✨ Gerar imagem";
+
+}
+
+</script>
+
+</body>
+</html>

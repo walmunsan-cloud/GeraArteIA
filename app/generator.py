@@ -1,7 +1,5 @@
 ﻿import time
 
-import time
-
 import torch
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 
@@ -17,12 +15,15 @@ from .config import (
     NEGATIVE_PROMPT,
 )
 
+from .prompt_optimizer import PromptOptimizer
+
 
 class GeraArteIA:
 
     def __init__(self, model_id: str = MODEL_PATH):
         self.model_id = model_id
         self.pipe = None
+        self.prompt_optimizer = PromptOptimizer()
 
     def carregar_modelo(self):
 
@@ -36,40 +37,59 @@ class GeraArteIA:
             self.model_id,
             torch_dtype=dtype,
             use_safetensors=True,
-           
         )
 
-        # Scheduler otimizado.
+        # Scheduler otimizado
         self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             self.pipe.scheduler.config
         )
 
         if DEVICE == "cuda":
-            # Otimizações para a GTX 960 com 2 GB de VRAM.
+            # Otimizações para a GTX 960 com 2 GB de VRAM
             self.pipe.enable_sequential_cpu_offload()
             self.pipe.enable_attention_slicing()
 
         print("Modelo carregado com sucesso.")
         print("Modo offline ativado.")
 
-    def gerar(self, prompt: str, nome_arquivo: str = "imagem_gerada.png"):
+    def gerar(
+        self,
+        prompt: str,
+        nome_arquivo: str = "imagem_gerada.png"
+    ):
 
         if self.pipe is None:
-            raise RuntimeError("O modelo ainda não foi carregado.")
+            raise RuntimeError(
+                "O modelo ainda não foi carregado."
+            )
+
+        # Otimização automática do prompt
+        prompt_original = prompt
+        prompt_final = self.prompt_optimizer.otimizar(prompt)
+
+        categoria = self.prompt_optimizer.detectar_categoria(
+            prompt_original
+        )
 
         print()
-        print("Iniciando geração...")
-        print(f"Prompt: {prompt}")
+        print("========================================")
+        print("INICIANDO GERAÇÃO")
+        print("========================================")
+        print(f"Prompt original: {prompt_original}")
+        print(f"Categoria detectada: {categoria}")
+        print(f"Prompt otimizado: {prompt_final}")
         print(f"Steps: {NUM_INFERENCE_STEPS}")
         print(f"Guidance Scale: {GUIDANCE_SCALE}")
         print(f"Seed: {SEED}")
 
         inicio = time.perf_counter()
 
-        generator = torch.Generator(device="cpu").manual_seed(SEED)
+        generator = torch.Generator(
+            device="cpu"
+        ).manual_seed(SEED)
 
         resultado = self.pipe(
-            prompt=prompt,
+            prompt=prompt_final,
             negative_prompt=NEGATIVE_PROMPT,
             width=IMAGE_WIDTH,
             height=IMAGE_HEIGHT,
@@ -81,20 +101,27 @@ class GeraArteIA:
         imagem = resultado.images[0]
 
         caminho = OUTPUTS_DIR / nome_arquivo
+
         imagem.save(caminho)
 
         tempo = time.perf_counter() - inicio
 
         print()
         print("========================================")
-        print("Imagem gerada com sucesso!")
+        print("IMAGEM GERADA COM SUCESSO!")
+        print("========================================")
         print(f"Arquivo: {caminho}")
         print(f"Tempo: {tempo:.2f} segundos")
-        print("========================================")
 
         if torch.cuda.is_available():
-            memoria = torch.cuda.max_memory_allocated() / 1024**3
+
+            memoria = (
+                torch.cuda.max_memory_allocated()
+                / 1024**3
+            )
+
             print(f"Pico de VRAM: {memoria:.2f} GB")
+
             torch.cuda.reset_peak_memory_stats()
 
         return caminho

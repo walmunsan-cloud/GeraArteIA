@@ -100,8 +100,6 @@ class PromptOptimizer:
 
         categoria = self.detectar_categoria(prompt)
 
-        # Mantém o pedido original e adiciona apenas
-        # informações essenciais para o modelo.
         partes = [
             prompt,
             "high quality",
@@ -109,7 +107,6 @@ class PromptOptimizer:
             "natural proportions",
         ]
 
-        # Animal
         if "animal" in categoria:
 
             partes.extend([
@@ -118,7 +115,6 @@ class PromptOptimizer:
                 "correct anatomy",
             ])
 
-        # Pessoa
         if "pessoa" in categoria:
 
             partes.extend([
@@ -126,7 +122,6 @@ class PromptOptimizer:
                 "correct anatomy",
             ])
 
-        # Veículo
         if "veiculo" in categoria:
 
             partes.extend([
@@ -134,7 +129,6 @@ class PromptOptimizer:
                 "correct proportions",
             ])
 
-        # Paisagem
         if "paisagem" in categoria:
 
             partes.extend([
@@ -142,7 +136,6 @@ class PromptOptimizer:
                 "natural perspective",
             ])
 
-        # Objeto
         if "objeto" in categoria:
 
             partes.extend([
@@ -150,8 +143,7 @@ class PromptOptimizer:
                 "correct shape",
             ])
 
-        # Reforços específicos de contexto
-        if "futurista" in texto or "futurista" in texto:
+        if "futurista" in texto:
             partes.append("futuristic")
 
         if "à noite" in texto or "a noite" in texto:
@@ -169,8 +161,4 @@ class PromptOptimizer:
         if "cinematográfico" in texto or "cinematografica" in texto:
             partes.append("cinematic")
 
-        # Limita a quantidade de reforços.
-        # O prompt original continua sendo prioridade.
-        prompt_final = ", ".join(partes)
-
-        return prompt_final
+        return ", ".join(partes)

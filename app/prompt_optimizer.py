@@ -126,7 +126,16 @@ class PromptOptimizer:
 
             partes.extend([
                 "complete vehicle",
-                "correct proportions",
+                "entire vehicle fully visible",
+                "full vehicle from front to rear",
+                "vehicle completely inside the frame",
+                "wide shot",
+                "medium distance camera",
+                "distant camera",
+                "clear space around the vehicle",
+                "no part of the vehicle cropped",
+                "side view or three-quarter view",
+                "correct vehicle proportions",
             ])
 
         if "paisagem" in categoria:
@@ -141,6 +150,26 @@ class PromptOptimizer:
             partes.extend([
                 "complete object",
                 "correct shape",
+            ])
+
+        if any(
+            termo in texto
+            for termo in [
+                "pista de corrida",
+                "pista corrida",
+                "autódromo",
+                "autodromo",
+                "circuito",
+            ]
+        ):
+
+            partes.extend([
+                "professional racetrack",
+                "racing circuit",
+                "visible asphalt track",
+                "racetrack surroundings visible",
+                "wide racing scene",
+                "track clearly visible in the composition",
             ])
 
         if "futurista" in texto:

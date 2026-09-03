@@ -200,95 +200,101 @@
 async function gerarImagem() {
 
     const prompt = document.getElementById("prompt").value.trim();
-
     const botao = document.getElementById("btnGerar");
-
     const status = document.getElementById("status");
-
     const resultado = document.getElementById("resultado");
-
     const imagem = document.getElementById("imagemGerada");
 
-
     if (!prompt) {
-
         status.style.display = "block";
-
         status.className = "status erro";
-
         status.textContent = "Digite uma descrição para gerar a imagem.";
-
         return;
     }
 
-
     botao.disabled = true;
-
     botao.textContent = "⏳ Gerando imagem...";
 
     status.style.display = "block";
-
     status.className = "status";
-
-    status.textContent =
-        "Preparando o modelo de inteligência artificial...";
-
+    status.textContent = "Preparando o modelo de inteligência artificial...";
     resultado.style.display = "none";
-
 
     try {
 
         const resposta = await fetch("/api/gerar", {
-
             method: "POST",
-
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             },
-
             body: JSON.stringify({
                 prompt: prompt
             })
-
         });
 
+        const tipo = resposta.headers.get("content-type") || "";
+        const textoResposta = await resposta.text();
 
-        const dados = await resposta.json();
+        let dados = null;
 
+        if (tipo.includes("application/json")) {
+            try {
+                dados = JSON.parse(textoResposta);
+            } catch (e) {
+                throw new Error("O servidor retornou JSON inválido.");
+            }
+        } else {
 
-        if (!resposta.ok) {
+            console.error("Resposta recebida:", textoResposta);
+
+            if (textoResposta.includes("<!DOCTYPE") ||
+                textoResposta.includes("<html")) {
+
+                throw new Error(
+                    "O servidor retornou uma página HTML em vez da resposta da API. Verifique se o FastAPI e o Cloudflare Tunnel estão ativos."
+                );
+            }
 
             throw new Error(
-                dados.detail || "Erro ao gerar imagem."
+                textoResposta || "Resposta inesperada do servidor."
             );
-
         }
 
+        if (!resposta.ok) {
+            throw new Error(
+                dados?.detail ||
+                dados?.message ||
+                "Erro ao gerar imagem."
+            );
+        }
+
+        if (!dados.imagem) {
+            throw new Error(
+                "A API respondeu, mas não informou o endereço da imagem."
+            );
+        }
 
         imagem.src = dados.imagem + "?t=" + Date.now();
 
         resultado.style.display = "block";
 
         status.className = "status sucesso";
-
-        status.textContent =
-            "Imagem gerada com sucesso!";
-
+        status.textContent = "Imagem gerada com sucesso!";
 
     } catch (erro) {
 
-        status.className = "status erro";
+        console.error("Erro GeraArteIA:", erro);
 
-        status.textContent =
-            "Erro: " + erro.message;
+        status.className = "status erro";
+        status.textContent = "Erro: " + erro.message;
+
+    } finally {
+
+        botao.disabled = false;
+        botao.textContent = "✨ Gerar imagem";
 
     }
-
-
-    botao.disabled = false;
-
-    botao.textContent = "✨ Gerar imagem";
-
 }
 
 </script>

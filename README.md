@@ -1,135 +1,200 @@
-# GeraArteIA
+# 🎨 GeraArteIA — Geração de Imagens por Difusão
 
-## Sistema de Geração de Imagens por Inteligência Artificial
+**GeraArteIA** é uma aplicação de Inteligência Artificial desenvolvida como projeto de **Trabalho de Conclusão de Curso (TCC)**, com o objetivo de demonstrar, de forma prática, o funcionamento da **geração de imagens a partir de descrições textuais utilizando modelos de Difusão**.
 
-O **GeraArteIA** é um sistema de geração de imagens a partir de descrições textuais (*text-to-image*), desenvolvido como projeto acadêmico de **Pós-Graduação em Engenharia de Software: Automação, Inovação e Inteligência Artificial**.
-
-O projeto utiliza técnicas de **Inteligência Artificial Generativa** e **modelos de difusão**, tendo como modelo principal o **Stable Diffusion v1.5**.
-
-O objetivo é transformar uma descrição fornecida pelo usuário em uma imagem gerada artificialmente, utilizando processamento por GPU quando disponível.
+O sistema recebe uma descrição fornecida pelo usuário (*prompt*), realiza o processamento do texto e utiliza o modelo **Stable Diffusion v1.5** para produzir uma imagem correspondente à solicitação.
 
 ---
 
-## 🎓 Projeto Acadêmico
+## 🚀 Demonstração Online
 
-**Projeto:** GeraArteIA
-**Tema:** Geração de Imagens por Difusão
-**Área:** Inteligência Artificial Generativa
-**Curso:** Pós-Graduação em Engenharia de Software: Automação, Inovação e Inteligência Artificial
+### ▶️ Acessar o GeraArteIA
 
-O projeto foi desenvolvido com foco em demonstrar, de forma prática, a aplicação de modelos de difusão na geração de conteúdo visual a partir de linguagem natural.
+**[🌐 ABRIR O GERADOR DE IMAGENS](https://brandon-begin-travelling-mode.trycloudflare.com)**
 
----
+> ⚠️ **Observação:** o link utiliza um túnel temporário do Cloudflare conectado ao ambiente de execução do projeto. Para a demonstração acadêmica, o ambiente precisa estar ativo.
 
-## 🧠 Sobre o Projeto
+### Como testar
 
-O GeraArteIA recebe uma descrição textual informada pelo usuário e utiliza um modelo de difusão para produzir uma imagem correspondente.
+1. Acesse o link acima.
+2. Digite uma descrição no campo de texto.
+3. Clique em **Gerar imagem**.
+4. Aguarde o processamento do modelo de Inteligência Artificial.
+5. A imagem gerada será apresentada na aplicação.
 
-Fluxo simplificado:
+### Exemplo de prompt
 
 ```text
-Usuário
-   │
-   ▼
-Descrição textual
-   │
-   ▼
-Otimização do prompt
-   │
-   ▼
-Stable Diffusion v1.5
-   │
-   ▼
-Processamento por IA
-   │
-   ▼
-Imagem gerada
+Um cavalo marrom correndo em um campo verde ao pôr do sol
 ```
 
-A aplicação possui uma interface web desenvolvida com **FastAPI**, permitindo que o usuário interaja com o sistema por meio do navegador.
+O sistema utiliza técnicas de otimização do prompt para melhorar a composição da imagem e reduzir problemas anatômicos, especialmente em representações de animais.
 
 ---
 
-## ✨ Funcionalidades
+# 🎓 Sobre o Projeto
 
-* Geração de imagens a partir de texto.
-* Utilização do modelo **Stable Diffusion v1.5**.
-* Otimização automática dos prompts.
-* Detecção de categoria do prompt.
-* Prompt negativo para reduzir distorções e elementos indesejados.
-* Geração de imagens em resolução **512 × 512 pixels**.
-* Controle de *seed* para permitir reprodutibilidade.
-* Utilização de GPU NVIDIA com CUDA quando disponível.
-* Otimizações de memória para execução em GPUs com menor quantidade de VRAM.
-* API REST desenvolvida com FastAPI.
-* Interface web para interação com o sistema.
-* Armazenamento das imagens geradas na pasta `outputs`.
+O GeraArteIA foi desenvolvido para demonstrar a aplicação prática de **Inteligência Artificial Generativa**, especificamente os modelos baseados em **Difusão**.
+
+Modelos de difusão são técnicas de aprendizado de máquina capazes de gerar imagens a partir de descrições textuais. O processo envolve a transformação progressiva de ruído em uma imagem coerente de acordo com as características descritas pelo usuário.
+
+O projeto apresenta uma implementação prática desse conceito por meio de uma aplicação web acessível pelo navegador.
 
 ---
 
-## 🏗️ Arquitetura
+# 🎯 Objetivos
 
-A arquitetura principal do GeraArteIA pode ser representada da seguinte forma:
+## Objetivo geral
+
+Desenvolver uma aplicação capaz de gerar imagens a partir de descrições textuais utilizando técnicas de **Inteligência Artificial Generativa e modelos de Difusão**.
+
+## Objetivos específicos
+
+* Demonstrar o funcionamento de modelos de geração de imagens por difusão;
+* Utilizar o modelo **Stable Diffusion v1.5** para geração de imagens;
+* Desenvolver uma interface web para interação com o usuário;
+* Implementar processamento e otimização dos prompts;
+* Utilizar aceleração por GPU para melhorar o desempenho;
+* Disponibilizar uma demonstração acessível por navegador;
+* Registrar e organizar o desenvolvimento do projeto utilizando Git e GitHub.
+
+---
+
+# 🧠 Tecnologias utilizadas
+
+| Tecnologia                  | Utilização                                        |
+| --------------------------- | ------------------------------------------------- |
+| **Python**                  | Linguagem principal do projeto                    |
+| **PyTorch**                 | Processamento de Inteligência Artificial          |
+| **Diffusers**               | Implementação do modelo de difusão                |
+| **Stable Diffusion v1.5**   | Geração das imagens                               |
+| **Transformers**            | Processamento dos componentes de linguagem        |
+| **FastAPI**                 | Desenvolvimento da API e aplicação web            |
+| **Uvicorn**                 | Servidor da aplicação                             |
+| **HTML / CSS / JavaScript** | Interface web                                     |
+| **Git / GitHub**            | Controle de versão e disponibilização do código   |
+| **Google Colab**            | Ambiente de execução com GPU                      |
+| **Cloudflare Tunnel**       | Acesso público à aplicação durante a demonstração |
+
+---
+
+# 🏗️ Arquitetura do sistema
+
+O funcionamento geral do GeraArteIA pode ser representado pelo seguinte fluxo:
 
 ```text
-┌──────────────────────────────┐
-│          Usuário             │
-│       Navegador Web          │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│          FastAPI             │
-│         web_app.py           │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│         GeraArteIA           │
-│      app/generator.py        │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│      Prompt Optimizer        │
-│  Otimização e categorização  │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│      Hugging Face Diffusers  │
-│     Stable Diffusion v1.5    │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│       PyTorch + CUDA         │
-│       GPU NVIDIA             │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│       Imagem PNG gerada      │
-│          /outputs            │
-└──────────────────────────────┘
+┌─────────────────────┐
+│       Usuário       │
+│                     │
+│  Digita o prompt    │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│    Interface Web    │
+│       HTML/CSS/JS   │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│       FastAPI       │
+│      Web API        │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Otimização do Prompt│
+│                     │
+│ Processamento textual│
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│   Stable Diffusion  │
+│       v1.5          │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│     GPU / PyTorch   │
+│                     │
+│ Geração da imagem   │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│    Imagem gerada    │
+│                     │
+│      PNG 512x512    │
+└─────────────────────┘
 ```
 
 ---
 
-## 📁 Estrutura do Projeto
+# ⚙️ Configuração da geração
+
+O projeto utiliza uma configuração voltada para equilibrar **qualidade da imagem e desempenho computacional**.
+
+| Parâmetro        | Configuração          |
+| ---------------- | --------------------- |
+| Modelo           | Stable Diffusion v1.5 |
+| Resolução        | 512 × 512 pixels      |
+| Steps            | 24                    |
+| Guidance Scale   | 7.0                   |
+| Seed padrão      | 42                    |
+| Dispositivo      | GPU CUDA              |
+| Formato de saída | PNG                   |
+
+O projeto também utiliza técnicas de otimização de memória, incluindo:
+
+* Attention Slicing;
+* VAE Slicing;
+* VAE Tiling;
+* Sequential CPU Offload.
+
+Essas técnicas permitem executar o modelo em GPUs com recursos limitados de memória.
+
+---
+
+# 🐴 Otimização de prompts
+
+Uma das funcionalidades implementadas no projeto é o **otimizador de prompts**.
+
+O sistema identifica determinados tipos de conteúdo e acrescenta características ao prompt para tentar melhorar a composição da imagem.
+
+Para representações de animais, por exemplo, são adicionadas orientações relacionadas a:
+
+```text
+full body animal
+entire animal fully visible
+head clearly visible
+complete head and face
+four legs clearly visible when applicable
+correct animal anatomy
+natural body proportions
+centered composition
+wide shot
+medium distance camera
+clear space around the animal
+no cropping
+animal completely inside the frame
+```
+
+Essa abordagem foi utilizada para reduzir problemas observados durante os testes, como animais parcialmente cortados ou com anatomia incompleta.
+
+---
+
+# 📁 Estrutura do projeto
 
 ```text
 GeraArteIA/
 │
 ├── app/
-│   ├── __init__.py
 │   ├── config.py
 │   ├── generator.py
-│   ├── main.py
 │   └── prompt_optimizer.py
 │
 ├── huggingface_space/
-│   └── main.py
 │
 ├── outputs/
 │
@@ -141,110 +206,79 @@ GeraArteIA/
 │   ├── static/
 │   └── templates/
 │
-├── .gitignore
-├── INICIAR_GERAARTEIA.bat
-├── INSTALAR_GERAARTEIA.bat
-├── lista_arquivos.txt
-├── README.md
+├── web_app.py
+│
 ├── requirements.txt
-├── requirements_backup.txt
-├── teste_modelo.py
-└── web_app.py
+├── README.md
+└── ...
 ```
 
 ---
 
-## ⚙️ Tecnologias Utilizadas
+# 🔄 Funcionamento
 
-| Tecnologia            | Utilização                                |
-| --------------------- | ----------------------------------------- |
-| Python                | Linguagem principal                       |
-| PyTorch               | Computação e execução do modelo           |
-| CUDA                  | Aceleração por GPU NVIDIA                 |
-| Diffusers             | Pipeline de geração por difusão           |
-| Transformers          | Componentes de processamento de linguagem |
-| Stable Diffusion v1.5 | Modelo de geração de imagens              |
-| FastAPI               | API e servidor web                        |
-| Uvicorn               | Servidor ASGI                             |
-| Jinja2                | Templates HTML                            |
-| Pillow                | Manipulação e armazenamento de imagens    |
-| NumPy                 | Operações numéricas                       |
-| Git                   | Controle de versão                        |
-| GitHub                | Hospedagem do código-fonte                |
+O processo de geração ocorre seguindo as seguintes etapas:
 
----
+### 1. Entrada
 
-## 📦 Requisitos
+O usuário fornece uma descrição textual da imagem desejada.
 
-Para executar o projeto localmente, recomenda-se:
+### 2. Processamento
 
-* Windows, Linux ou ambiente compatível com Python.
-* Python **3.11 ou 3.12**.
-* Memória RAM suficiente para carregar o modelo.
-* Aproximadamente **4 GB ou mais de espaço disponível** para o modelo e dependências.
-* GPU NVIDIA com CUDA é recomendada para melhor desempenho.
+A aplicação recebe o texto por meio da API desenvolvida em **FastAPI**.
 
-### GPU
+### 3. Otimização
 
-O sistema identifica automaticamente se existe uma GPU CUDA disponível:
+O sistema processa o prompt e acrescenta informações que podem auxiliar na composição da imagem.
 
-```python
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-```
+### 4. Geração
 
-Quando uma GPU compatível está disponível, o processamento pode ser realizado utilizando CUDA.
+O prompt processado é enviado ao modelo **Stable Diffusion v1.5**.
 
-Caso contrário, o sistema utiliza CPU, embora a geração possa ser consideravelmente mais lenta.
+### 5. Processamento computacional
+
+O modelo utiliza **PyTorch** e aceleração por **CUDA/GPU** para realizar a geração.
+
+### 6. Resultado
+
+A imagem é salva no formato PNG e disponibilizada ao usuário pela aplicação web.
 
 ---
 
-# 🚀 Instalação
+# 💻 Execução local
 
-## 1. Clonar o repositório
+Para executar o projeto localmente, é necessário ter:
+
+* Python 3.10 ou superior;
+* Git;
+* GPU compatível com CUDA recomendada;
+* Dependências do projeto.
+
+Clone o repositório:
 
 ```bash
 git clone https://github.com/walmunsan-cloud/GeraArteIA.git
 ```
 
-Entrar na pasta:
+Entre no diretório:
 
 ```bash
 cd GeraArteIA
 ```
 
----
-
-## 2. Criar ambiente virtual
-
-```bash
-python -m venv .venv
-```
-
-Ativar no Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
----
-
-## 3. Instalar as dependências
+Instale as dependências:
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
-
-# ▶️ Executando o sistema
-
-Após instalar as dependências, execute:
+Execute a aplicação:
 
 ```bash
-uvicorn web_app:app --host 127.0.0.1 --port 8000
+uvicorn web_app:app --host 0.0.0.0 --port 8000
 ```
 
-Depois abra o navegador em:
+Depois, acesse:
 
 ```text
 http://127.0.0.1:8000
@@ -252,350 +286,99 @@ http://127.0.0.1:8000
 
 ---
 
-# 🪟 Instalação simplificada no Windows
+# ☁️ Ambiente de demonstração
 
-O projeto também possui scripts `.bat` para facilitar a utilização.
+Durante o desenvolvimento e os testes, o projeto foi executado em ambiente de **Google Colab utilizando GPU NVIDIA Tesla T4**.
 
-### Instalação
+Para disponibilizar temporariamente a aplicação para acesso externo durante a apresentação, foi utilizado **Cloudflare Tunnel**.
 
-Execute:
-
-```text
-INSTALAR_GERAARTEIA.bat
-```
-
-O instalador:
-
-1. verifica a instalação do Python;
-2. cria o ambiente virtual;
-3. ativa o ambiente;
-4. atualiza o pip;
-5. instala as dependências do projeto.
-
-Depois da instalação, execute:
-
-```text
-INICIAR_GERAARTEIA.bat
-```
-
-O script inicia o servidor e abre o sistema no navegador.
+Essa arquitetura permite que o professor ou avaliador acesse a aplicação pelo navegador sem precisar instalar o projeto localmente.
 
 ---
 
-# 🖼️ Gerando uma imagem
+# 🧪 Testes realizados
 
-Na interface web, o usuário informa uma descrição textual.
+Durante o desenvolvimento foram realizados testes envolvendo:
 
-Exemplo:
+* Inicialização da aplicação FastAPI;
+* Comunicação entre interface web e API;
+* Carregamento do modelo Stable Diffusion;
+* Utilização da GPU através do CUDA;
+* Geração de imagens em 512 × 512 pixels;
+* Testes com diferentes prompts;
+* Testes específicos com animais;
+* Otimização automática de prompts;
+* Geração e armazenamento das imagens;
+* Acesso externo através de túnel seguro.
+
+Os testes demonstraram o funcionamento completo do fluxo:
 
 ```text
-uma bela paisagem brasileira ao pôr do sol,
-com montanhas, árvores verdes e céu dramático
-azul e laranja, fotografia realista
-```
-
-O sistema processa o prompt, realiza a otimização automática e envia a solicitação para o modelo Stable Diffusion.
-
-A imagem resultante é armazenada na pasta:
-
-```text
-outputs/
+Prompt → API → Otimização → Stable Diffusion → GPU → Imagem
 ```
 
 ---
 
-# ⚙️ Configuração do Modelo
+# 📊 Resultado
 
-As principais configurações utilizadas no projeto são:
+O GeraArteIA demonstrou a viabilidade de utilizar modelos de **Inteligência Artificial Generativa baseados em Difusão** para transformar descrições textuais em imagens.
 
-```text
-Modelo:
-stable-diffusion-v1-5/stable-diffusion-v1-5
-
-Resolução:
-512 × 512 pixels
-
-Steps:
-24
-
-Guidance Scale:
-7.0
-
-Seed padrão:
-42
-```
-
-Esses parâmetros foram definidos buscando equilíbrio entre qualidade da imagem e tempo de processamento.
-
----
-
-# 🛡️ Prompt Negativo
-
-O sistema utiliza um *negative prompt* para tentar reduzir problemas comuns encontrados em modelos de geração de imagens.
-
-Entre os elementos considerados estão:
-
-```text
-blurry
-low quality
-distorted
-deformed
-bad anatomy
-bad proportions
-extra limbs
-extra fingers
-missing fingers
-missing head
-missing body parts
-cropped
-text
-watermark
-logo
-```
-
-Essa estratégia ajuda a reduzir a ocorrência de elementos visualmente indesejados durante a geração.
-
----
-
-# 🚀 Otimizações
-
-Para reduzir o consumo de memória durante a execução, principalmente em GPUs com menor quantidade de VRAM, o projeto utiliza técnicas como:
-
-```text
-Sequential CPU Offload
-Attention Slicing
-```
-
-Essas técnicas permitem reduzir a pressão de memória da GPU durante a execução do modelo.
-
----
-
-# 🧪 Validação Experimental
-
-O sistema foi testado em ambiente equipado com GPU NVIDIA Tesla T4.
-
-### Ambiente utilizado
-
-```text
-GPU:
-NVIDIA Tesla T4
-
-VRAM:
-15 GB
-
-PyTorch:
-2.10.0+cu128
-
-CUDA:
-Disponível
-
-Diffusers:
-0.39.0
-
-Transformers:
-5.14.1
-
-Accelerate:
-1.14.0
-
-Safetensors:
-0.8.0
-```
-
-Durante o teste completo da classe `GeraArteIA`, o modelo foi carregado com sucesso e uma imagem foi gerada utilizando:
-
-```text
-Resolução: 512 × 512
-Steps: 24
-Guidance Scale: 7.0
-Seed: 42
-```
-
-Resultado observado no teste:
-
-```text
-Modelo carregado com sucesso.
-
-IMAGEM GERADA COM SUCESSO!
-
-Tempo de geração:
-aproximadamente 20,88 segundos
-
-Pico de VRAM:
-aproximadamente 3,75 GB
-```
-
-O teste confirmou o funcionamento integrado entre:
-
-```text
-Python
-   ↓
-PyTorch
-   ↓
-CUDA
-   ↓
-Diffusers
-   ↓
-Stable Diffusion v1.5
-   ↓
-GeraArteIA
-   ↓
-Imagem PNG
-```
-
----
-
-# 🔬 Testes
-
-O projeto possui uma estrutura destinada a testes automatizados e testes do modelo.
-
-Também está disponível o arquivo:
-
-```text
-teste_modelo.py
-```
-
-Ele pode ser utilizado para verificar o carregamento e o funcionamento do modelo.
-
----
-
-# 🌐 API
-
-A aplicação disponibiliza endpoints através do FastAPI.
-
-### Status
-
-```text
-GET /api/status
-```
-
-Retorna informações sobre o estado do sistema.
-
-### Geração
-
-```text
-POST /api/gerar
-```
-
-Recebe um prompt e solicita a geração de uma imagem.
-
-Exemplo de requisição:
-
-```json
-{
-  "prompt": "uma bela paisagem brasileira ao pôr do sol"
-}
-```
-
-### Imagem
-
-```text
-GET /api/imagem/{nome_arquivo}
-```
-
-Permite acessar uma imagem gerada anteriormente.
-
----
-
-# 📚 Conceitos Demonstrados
-
-O GeraArteIA demonstra na prática conceitos relacionados a:
-
-* Inteligência Artificial Generativa;
-* Machine Learning;
-* Deep Learning;
-* Modelos de difusão;
-* Text-to-Image;
-* Processamento de linguagem natural;
-* Engenharia de prompts;
-* Otimização de inferência;
-* Computação acelerada por GPU;
-* APIs REST;
-* Arquitetura de software;
-* Integração entre modelos de IA e aplicações web;
-* Controle de versão com Git e GitHub.
-
----
-
-# 🎯 Objetivo Acadêmico
-
-O principal objetivo do projeto é demonstrar como modelos de difusão podem ser integrados a uma aplicação de software para possibilitar a geração de imagens a partir de linguagem natural.
-
-O projeto também busca apresentar uma arquitetura prática que integre:
+A aplicação também demonstra a integração entre diferentes tecnologias de software:
 
 ```text
 Interface Web
-      +
-API
-      +
-Lógica de aplicação
-      +
-Engenharia de Prompt
-      +
-Modelo de IA
-      +
-GPU/CUDA
+      ↓
+FastAPI
+      ↓
+Python
+      ↓
+Diffusers / PyTorch
+      ↓
+Stable Diffusion
+      ↓
+GPU CUDA
+      ↓
+Imagem gerada
 ```
 
 ---
 
-# 👨‍💻 Autor
+# 🔐 Observações
 
-**Walter Muniz Santos e Luan Jesus Pereira Gomes**
+O projeto foi desenvolvido para fins **acadêmicos e demonstrativos**.
 
-Projeto desenvolvido para conclusão da Pós-Graduação em Engenharia de Software: Automação, Inovação e Inteligência Artificial.
+A execução do modelo Stable Diffusion exige recursos computacionais consideráveis. Por esse motivo, o ambiente utilizado para a demonstração emprega GPU.
+
+O link de demonstração disponibilizado acima é temporário e depende da disponibilidade do ambiente de execução.
+
+---
+
+# 👨‍🎓 Projeto acadêmico
+
+**Projeto:** GeraArteIA
+**Tema:** Geração de Imagens por Difusão
+**Área:** Engenharia de Software, Automação, Inovação e Inteligência Artificial
+**Finalidade:** Trabalho de Conclusão de Curso (TCC)
 
 ---
 
 # 📌 Repositório
 
-Código-fonte completo do projeto:
+O código-fonte completo do projeto está disponível publicamente no GitHub:
 
-https://github.com/walmunsan-cloud/GeraArteIA
+**https://github.com/walmunsan-cloud/GeraArteIA**
 
----
+### 🌐 Demonstração
 
-# 📄 Observações
-
-O modelo **Stable Diffusion v1.5** é um modelo de terceiros utilizado pelo projeto para fins acadêmicos e experimentais.
-
-A primeira execução pode levar mais tempo devido ao carregamento dos componentes necessários do modelo.
-
-A utilização de GPU NVIDIA compatível com CUDA é recomendada para obter melhor desempenho.
+**https://brandon-begin-travelling-mode.trycloudflare.com**
 
 ---
 
-## 🏁 Status do Projeto
+## 📄 Licença
 
-**Concluído para fins de demonstração acadêmica e apresentação do TCC.**
-
-O sistema foi validado com carregamento do modelo, processamento do prompt e geração efetiva de imagens utilizando GPU NVIDIA Tesla T4.
+Este projeto foi desenvolvido para fins acadêmicos e educacionais.
 
 
-## # 🚀 Demonstração Online
+## Desenvolvido por Walter Muniz Santos e Luan Jesus Pereira Gomes 
 
-O GeraArteIA possui uma demonstração reproduzível no Kaggle, onde é possível visualizar e executar o processo de geração de imagens utilizando GPU NVIDIA Tesla T4.
 
-👉 **[Abrir demonstração do GeraArteIA no Kaggle](https://www.kaggle.com/code/waltermuniz/notebook3c001cd725)**
-
-## Como testar
-
-1. Abra a demonstração no Kaggle.
-2. Faça login em uma conta Kaggle, caso seja necessário.
-3. Ative uma GPU nas configurações da sessão.
-4. Execute as células do Notebook na ordem apresentada.
-5. Aguarde o carregamento do modelo Stable Diffusion v1.5.
-6. Informe ou altere o prompt de geração.
-7. Execute a geração da imagem.
-
-### Ambiente validado
-
-- GPU: NVIDIA Tesla T4
-- CUDA: disponível
-- PyTorch: 2.10.0+cu128
-- Stable Diffusion: v1.5
-- Resolução: 512 × 512
-- Steps: 24
-- Guidance Scale: 7.0
-
-> **Observação:** a disponibilidade de GPU no Kaggle depende dos recursos disponíveis na conta e no momento da execução.

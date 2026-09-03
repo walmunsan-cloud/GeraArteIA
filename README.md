@@ -370,7 +370,7 @@ O código-fonte completo do projeto está disponível publicamente no GitHub:
 
 ### 🌐 Demonstração
 
-**https://brandon-begin-travelling-mode.trycloudflare.com**
+**[https://brandon-begin-travelling-mode.trycloudflare.com](https://controlled-appropriations-appointment-cruises.trycloudflare.com)**
 
 ---
 

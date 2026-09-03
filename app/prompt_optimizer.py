@@ -110,9 +110,19 @@ class PromptOptimizer:
         if "animal" in categoria:
 
             partes.extend([
-                "full body",
-                "complete head",
-                "correct anatomy",
+                "full body animal",
+                "entire animal fully visible",
+                "head clearly visible",
+                "complete head and face",
+                "four legs clearly visible when applicable",
+                "correct animal anatomy",
+                "natural body proportions",
+                "centered composition",
+                "wide shot",
+                "medium distance camera",
+                "clear space around the animal",
+                "no cropping",
+                "animal completely inside the frame",
             ])
 
         if "pessoa" in categoria:

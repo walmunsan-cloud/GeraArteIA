@@ -570,3 +570,32 @@ A utilização de GPU NVIDIA compatível com CUDA é recomendada para obter melh
 **Concluído para fins de demonstração acadêmica e apresentação do TCC.**
 
 O sistema foi validado com carregamento do modelo, processamento do prompt e geração efetiva de imagens utilizando GPU NVIDIA Tesla T4.
+
+
+## # 🚀 Demonstração Online
+
+O GeraArteIA possui uma demonstração reproduzível no Kaggle, onde é possível visualizar e executar o processo de geração de imagens utilizando GPU NVIDIA Tesla T4.
+
+👉 **[Abrir demonstração do GeraArteIA no Kaggle](https://www.kaggle.com/code/waltermuniz/notebook3c001cd725)**
+
+## Como testar
+
+1. Abra a demonstração no Kaggle.
+2. Faça login em uma conta Kaggle, caso seja necessário.
+3. Ative uma GPU nas configurações da sessão.
+4. Execute as células do Notebook na ordem apresentada.
+5. Aguarde o carregamento do modelo Stable Diffusion v1.5.
+6. Informe ou altere o prompt de geração.
+7. Execute a geração da imagem.
+
+### Ambiente validado
+
+- GPU: NVIDIA Tesla T4
+- CUDA: disponível
+- PyTorch: 2.10.0+cu128
+- Stable Diffusion: v1.5
+- Resolução: 512 × 512
+- Steps: 24
+- Guidance Scale: 7.0
+
+> **Observação:** a disponibilidade de GPU no Kaggle depende dos recursos disponíveis na conta e no momento da execução.

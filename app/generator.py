@@ -1,4 +1,4 @@
-﻿import time
+import time
 
 import torch
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
@@ -66,6 +66,21 @@ class GeraArteIA:
         # Otimização automática do prompt
         prompt_original = prompt
         prompt_final = self.prompt_optimizer.otimizar(prompt)
+
+        # O CLIP do Stable Diffusion 1.5 suporta no máximo 77 tokens.
+        # O prompt é limitado antes da inferência para evitar truncamento.
+        tokens = self.pipe.tokenizer(
+            prompt_final,
+            truncation=True,
+            max_length=77,
+            add_special_tokens=True,
+        )
+
+        prompt_final = self.pipe.tokenizer.decode(
+            tokens["input_ids"],
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        ).strip()
 
         categoria = self.prompt_optimizer.detectar_categoria(
             prompt_original

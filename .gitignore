@@ -1,13 +1,33 @@
-﻿.venv/
+﻿# Ambiente virtual e caches Python
+.venv/
+venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.log
-erro_execucao.txt
-outputs/
-*.tmp
-*.temp
-.env
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
 
-GeraArteIA_backup/
+# Segredos e configurações locais
+.env
+.env.*
+!.env.example
+
+# Arquivos temporários
+*.log
+.DS_Store
+Thumbs.db
+
+# Imagens geradas localmente
+outputs/*
+!outputs/.gitkeep
+generated/*
+!generated/.gitkeep
+
+# Modelos de IA grandes
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+
+# Configurações locais de ferramentas
+.modal/

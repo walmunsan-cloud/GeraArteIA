@@ -3,20 +3,19 @@ import torch
 from diffusers import StableDiffusionPipeline
 from app.config import MODEL_NAME, DEVICE
 
-class ImageGenerator:
+class GeraArteIA:
     _instance = None
     _pipeline = None
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(ImageGenerator, cls).__new__(cls)
+            cls._instance = super(GeraArteIA, cls).__new__(cls)
         return cls._instance
 
     @property
     def pipeline(self):
         if self._pipeline is None:
-            print("Carregando o modelo Stable Diffusion sob demanda (Lazy Loading)...")
-            # Força o uso de float16 e otimizações para nuvem
+            print("Carregando o modelo Stable Diffusion sob demanda...")
             dtype = torch.float16 if torch.cuda.is_available() else torch.float32
             self._pipeline = StableDiffusionPipeline.from_pretrained(
                 MODEL_NAME,

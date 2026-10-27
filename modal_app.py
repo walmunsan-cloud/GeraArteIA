@@ -1,6 +1,6 @@
 ﻿import modal
 
-app = modal.App("gera-arte-ia")
+app = modal.App("geraarteia-web")
 
 image = (
     modal.Image.debian_slim(python_version="3.11")

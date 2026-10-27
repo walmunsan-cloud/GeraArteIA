@@ -17,7 +17,7 @@ image = (
     )
 )
 
-@app.function(image=image, gpu="any", timeout=900, allow_concurrent_inputs=10)
+@app.function(image=image, gpu="any", timeout=900)
 @modal.asgi_app()
 def fastapi_app():
     from web_app import app as web_application

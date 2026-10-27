@@ -1,6 +1,6 @@
 ﻿import modal
 
-app = modal.App("geraarteia-tcc")
+app = modal.App("geraarteia-tcc-final")
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -24,13 +24,12 @@ image = (
     scaledown_window=300
 )
 @modal.fastapi_endpoint()
-def main_web(prompt: str = "Um carro desportivo na estrada", negative_prompt: str = "", steps: int = 25):
+def main_web(prompt: str = "Um carro desportivo na estrada", negative_prompt: str = "", steps: int = 20):
     import base64
     import io
     import torch
     from diffusers import StableDiffusionPipeline
     
-    # Carregamento otimizado na GPU do Modal sob demanda
     model_id = "stable-diffusion-v1-5/stable-diffusion-v1-5"
     dtype = torch.float16 if torch.cuda.is_available() else torch.float32
     
@@ -61,7 +60,6 @@ def main_web(prompt: str = "Um carro desportivo na estrada", negative_prompt: st
     image.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
     
-    # Interface HTML limpa, moderna e responsiva (compatível com PC e telemóvel)
     html_content = f"""
     <!DOCTYPE html>
     <html lang="pt">
@@ -92,7 +90,7 @@ def main_web(prompt: str = "Um carro desportivo na estrada", negative_prompt: st
     <body>
         <div class="container">
             <h1>🎨 GeraArteIA</h1>
-            <p>Trabalho de Conclusão de Curso (TCC) - Geração de Arte com IA na Nuvem</p>
+            <p>Trabalho de Conclusão de Curso (TCC) - Geração de Arte com IA</p>
             <form method="GET" action="/" onsubmit="showLoading()">
                 <input type="text" name="prompt" value="{prompt}" placeholder="Descreva a imagem que deseja gerar..." required>
                 <button type="submit">✨ Gerar Imagem</button>

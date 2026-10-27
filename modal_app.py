@@ -15,12 +15,9 @@ image = (
         "pydantic",
         "huggingface_hub"
     )
-    .run_commands(
-        "python -c \"from diffusers import StableDiffusionPipeline; StableDiffusionPipeline.from_pretrained('stable-diffusion-v1-5/stable-diffusion-v1-5', use_safetensors=True)\""
-    )
 )
 
-@app.function(image=image, gpu="any", timeout=600)
+@app.function(image=image, gpu="any", timeout=900)
 @modal.wsgi_app()
 def fastapi_app():
     from web_app import app as web_application

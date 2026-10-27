@@ -2,7 +2,7 @@
 
 app = modal.App("geraarteia-web")
 
-# Monta todo o diretório do projeto para garantir acesso aos templates, assets e banco de dados
+# Imagem com todas as dependências necessárias para a interface web e modelos de IA
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
@@ -20,7 +20,7 @@ image = (
     )
 )
 
-# Empacota todo o projeto local para dentro do container do Modal
+# Volume para persistir o histórico e banco de dados SQLite na nuvem
 volume = modal.Volume.from_name("geraarteia-vol", create_if_missing=True)
 
 @app.function(
@@ -32,6 +32,6 @@ volume = modal.Volume.from_name("geraarteia-vol", create_if_missing=True)
 )
 @modal.asgi_app()
 def fastapi_app():
-    # Importa a aplicação FastAPI original do teu web_app.py
+    # Importa a tua aplicação FastAPI original mantendo toda a estrutura visual e lógica
     from web_app import app as web_application
     return web_application

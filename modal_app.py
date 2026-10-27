@@ -5,6 +5,8 @@ app = modal.App("geraarteia-web")
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
+        "fastapi[standard]",
+        "uvicorn",
         "torch",
         "diffusers",
         "transformers",
@@ -22,18 +24,51 @@ image = (
     scaledown_window=300
 )
 @modal.fastapi_endpoint()
-def main_web(prompt: str = "Um cavalo majestoso", negative_prompt: str = "", steps: int = 25):
+def main_web(prompt: str = "Um cavalo majestoso", negative_prompt: str = "", steps: int = 20):
     import base64
     import io
-    from app.generator import GeraArteIA
+    import traceback
     
-    generator = GeraArteIA()
-    image = generator.generate(prompt=prompt, negative_prompt=negative_prompt, steps=steps)
+    img_str = ""
+    error_message = ""
     
-    buffered = io.BytesIO()
-    image.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    
+    try:
+        import torch
+        from diffusers import StableDiffusionPipeline
+        
+        model_id = "stable-diffusion-v1-5/stable-diffusion-v1-5"
+        dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+        
+        pipe = StableDiffusionPipeline.from_pretrained(
+            model_id,
+            torch_dtype=dtype,
+            low_cpu_mem_usage=True
+        )
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        pipe = pipe.to(device)
+        
+        if torch.cuda.is_available():
+            try:
+                pipe.enable_attention_slicing()
+            except Exception:
+                pass
+
+        with torch.autocast(device if device == "cuda" else "cpu"):
+            image = pipe(
+                prompt=prompt,
+                negative_prompt=negative_prompt if negative_prompt else None,
+                num_inference_steps=steps,
+                width=512,
+                height=512
+            ).images[0]
+        
+        buffered = io.BytesIO()
+        image.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        
+    except Exception as e:
+        error_message = f"Erro na geracao: {str(e)}<br><pre>{traceback.format_exc()}</pre>"
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="pt">
@@ -52,6 +87,7 @@ def main_web(prompt: str = "Um cavalo majestoso", negative_prompt: str = "", ste
             button:hover {{ background: #0284c7; }}
             .image-box {{ margin-top: 30px; }}
             img {{ max-width: 100%; height: auto; border-radius: 8px; border: 2px solid #334155; }}
+            .error {{ color: #f87171; background: #451a03; padding: 15px; border-radius: 6px; margin-top: 20px; text-align: left; font-size: 13px; word-break: break-all; }}
             .loading {{ font-size: 14px; color: #38bdf8; margin-top: 10px; display: none; }}
         </style>
         <script>
@@ -61,15 +97,16 @@ def main_web(prompt: str = "Um cavalo majestoso", negative_prompt: str = "", ste
     <body>
         <div class="container">
             <h1>🎨 GeraArteIA</h1>
-            <p>Trabalho de Conclusão de Curso (TCC) - Geração de Arte com IA</p>
+            <p>Trabalho de Conclusão de Curso (TCC) - Geração de Arte com IA na Nuvem</p>
             <form method="GET" action="/" onsubmit="showLoading()">
-                <input type="text" name="prompt" value="{prompt}" placeholder="Ex: Um cavalo majestoso..." required>
+                <input type="text" name="prompt" value="{prompt}" placeholder="Ex: Um cavalo majestoso na praia..." required>
                 <button type="submit">✨ Gerar Imagem</button>
             </form>
-            <div id="load-msg" class="loading">A processar na GPU (pode demorar alguns segundos)...</div>
-            <div class="image-box">
-                <img src="data:image/png;base64,{img_str}" alt="Arte gerada por IA">
-            </div>
+            <div id="load-msg" class="loading">A processar na GPU (o primeiro carregamento pode levar até 30 segundos)...</div>
+            
+            {"<div class='error'><strong>Ocorreu um detalhe técnico:</strong><br>" + error_message + "</div>" if error_message else ""}
+            
+            {("<div class='image-box'><img src='data:image/png;base64," + img_str + "' alt='Arte gerada por IA'></div>") if img_str else ""}
         </div>
     </body>
     </html>

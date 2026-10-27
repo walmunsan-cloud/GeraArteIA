@@ -12,7 +12,11 @@ image = (
         "transformers",
         "accelerate",
         "safetensors",
-        "pydantic"
+        "pydantic",
+        "huggingface_hub"
+    )
+    .run_commands(
+        "python -c \"from diffusers import StableDiffusionPipeline; StableDiffusionPipeline.from_pretrained('stable-diffusion-v1-5/stable-diffusion-v1-5', use_safetensors=True)\""
     )
 )
 

@@ -1,6 +1,6 @@
 ﻿import modal
 
-app = modal.App("geraarteia-tcc-final")
+app = modal.App("geraarteia-tcc-sucesso")
 
 image = (
     modal.Image.debian_slim(python_version="3.11")

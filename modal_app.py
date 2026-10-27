@@ -1,6 +1,6 @@
 ﻿import modal
 
-app = modal.App("geraarteia-web")
+app = modal.App("geraarteia-web-v2")
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -30,7 +30,6 @@ def main_web(prompt: str = "Um cavalo majestoso", negative_prompt: str = "", ste
     import torch
     from diffusers import StableDiffusionPipeline
     
-    # Carregamento seguro e direto do modelo
     model_id = "stable-diffusion-v1-5/stable-diffusion-v1-5"
     dtype = torch.float16 if torch.cuda.is_available() else torch.float32
     

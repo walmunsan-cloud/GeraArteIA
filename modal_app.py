@@ -18,6 +18,13 @@ image = (
 )
 
 @app.function(image=image, gpu="any", timeout=900)
+@modal.web_endpoint(method="GET")
+def index():
+    from fastapi.responses import RedirectResponse
+    # Redireciona para a rota principal da aplicação
+    return RedirectResponse(url="/")
+
+@app.function(image=image, gpu="any", timeout=900)
 @modal.asgi_app()
 def fastapi_app():
     from web_app import app as web_application

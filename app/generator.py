@@ -1,161 +1,44 @@
-import time
-
+﻿import os
 import torch
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionPipeline
+from app.config import MODEL_NAME, DEVICE
 
-from .config import (
-    MODEL_PATH,
-    OUTPUTS_DIR,
-    DEVICE,
-    IMAGE_WIDTH,
-    IMAGE_HEIGHT,
-    NUM_INFERENCE_STEPS,
-    GUIDANCE_SCALE,
-    SEED,
-    NEGATIVE_PROMPT,
-    HORSE_NEGATIVE_PROMPT,
-)
+class ImageGenerator:
+    _instance = None
+    _pipeline = None
 
-from .prompt_optimizer import PromptOptimizer
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ImageGenerator, cls).__new__(cls)
+        return cls._instance
 
-
-class GeraArteIA:
-
-    def __init__(self, model_id: str = MODEL_PATH):
-        self.model_id = model_id
-        self.pipe = None
-        self.prompt_optimizer = PromptOptimizer()
-
-    def carregar_modelo(self):
-
-        print("Carregando modelo local...")
-        print(f"Modelo: {self.model_id}")
-        print(f"Dispositivo: {DEVICE}")
-
-        dtype = torch.float16 if DEVICE == "cuda" else torch.float32
-
-        self.pipe = StableDiffusionPipeline.from_pretrained(
-            self.model_id,
-            torch_dtype=dtype,
-            use_safetensors=True,
-        )
-
-        # Scheduler otimizado
-        self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-            self.pipe.scheduler.config
-        )
-
-        if DEVICE == "cuda":
-            # Otimizações para a GTX 960 com 2 GB de VRAM
-            self.pipe.enable_sequential_cpu_offload()
-            self.pipe.enable_attention_slicing()
-
-        print("Modelo carregado com sucesso.")
-        print("Modo offline ativado.")
-
-    def gerar(
-        self,
-        prompt: str,
-        nome_arquivo: str = "imagem_gerada.png",
-        callback_progresso=None,
-    ):
-
-        if self.pipe is None:
-            raise RuntimeError(
-                "O modelo ainda não foi carregado."
+    @property
+    def pipeline(self):
+        if self._pipeline is None:
+            print("Carregando o modelo Stable Diffusion sob demanda (Lazy Loading)...")
+            # Força o uso de float16 e otimizações para nuvem
+            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+            self._pipeline = StableDiffusionPipeline.from_pretrained(
+                MODEL_NAME,
+                torch_dtype=dtype,
+                low_cpu_mem_usage=True
             )
+            self._pipeline = self._pipeline.to(DEVICE)
+            if torch.cuda.is_available():
+                try:
+                    self._pipeline.enable_attention_slicing()
+                except Exception:
+                    pass
+        return self._pipeline
 
-        # Otimização automática do prompt
-        prompt_original = prompt
-        prompt_final = self.prompt_optimizer.otimizar(prompt)
-
-        # O CLIP do Stable Diffusion 1.5 suporta no máximo 77 tokens.
-        # O prompt é limitado antes da inferência para evitar truncamento.
-        tokens = self.pipe.tokenizer(
-            prompt_final,
-            truncation=True,
-            max_length=77,
-            add_special_tokens=True,
-        )
-
-        prompt_final = self.pipe.tokenizer.decode(
-            tokens["input_ids"],
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        ).strip()
-
-        categoria = self.prompt_optimizer.detectar_categoria(
-            prompt_original
-        )
-
-        print()
-        print("========================================")
-        print("INICIANDO GERAÇÃO")
-        print("========================================")
-        print(f"Prompt original: {prompt_original}")
-        print(f"Categoria detectada: {categoria}")
-        print(f"Prompt otimizado: {prompt_final}")
-        print(f"Steps: {NUM_INFERENCE_STEPS}")
-        print(f"Guidance Scale: {GUIDANCE_SCALE}")
-        print(f"Seed: {SEED}")
-
-        inicio = time.perf_counter()
-
-        generator = torch.Generator(
-            device="cpu"
-        ).manual_seed(SEED)
-
-        def acompanhar_etapa(pipe, etapa, timestep, callback_kwargs):
-            if callback_progresso is not None:
-                percentual = int((etapa + 1) / NUM_INFERENCE_STEPS * 100)
-                callback_progresso(
-                    percentual,
-                    etapa + 1,
-                    NUM_INFERENCE_STEPS,
-                )
-            return callback_kwargs
-
-        texto_normalizado = self.prompt_optimizer._normalizar(prompt_original)
-        palavras_cavalo = ("cavalo", "cavalos", "egua", "eguas", "potro", "potros")
-        negativo_final = NEGATIVE_PROMPT
-        if any(palavra in texto_normalizado for palavra in palavras_cavalo):
-            negativo_final = f"{NEGATIVE_PROMPT}, {HORSE_NEGATIVE_PROMPT}"
-
-        resultado = self.pipe(
-            prompt=prompt_final,
-            negative_prompt=negativo_final,
-            width=IMAGE_WIDTH,
-            height=IMAGE_HEIGHT,
-            num_inference_steps=NUM_INFERENCE_STEPS,
-            guidance_scale=GUIDANCE_SCALE,
-            generator=generator,
-            callback_on_step_end=acompanhar_etapa,
-        )
-
-        imagem = resultado.images[0]
-
-        caminho = OUTPUTS_DIR / nome_arquivo
-
-        imagem.save(caminho)
-
-        tempo = time.perf_counter() - inicio
-
-        print()
-        print("========================================")
-        print("IMAGEM GERADA COM SUCESSO!")
-        print("========================================")
-        print(f"Arquivo: {caminho}")
-        print(f"Tempo: {tempo:.2f} segundos")
-
-        if torch.cuda.is_available():
-
-            memoria = (
-                torch.cuda.max_memory_allocated()
-                / 1024**3
-            )
-
-            print(f"Pico de VRAM: {memoria:.2f} GB")
-
-            torch.cuda.reset_peak_memory_stats()
-
-        return caminho
+    def generate(self, prompt: str, negative_prompt: str = "", steps: int = 30, width: int = 512, height: int = 512):
+        pipe = self.pipeline
+        with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
+            image = pipe(
+                prompt=prompt,
+                negative_prompt=negative_prompt if negative_prompt else None,
+                num_inference_steps=steps,
+                width=width,
+                height=height
+            ).images[0]
+        return image

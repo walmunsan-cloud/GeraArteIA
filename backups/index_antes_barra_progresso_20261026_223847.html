@@ -1,0 +1,925 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101322">
+    <title>GeraArteIA | Criatividade com inteligência artificial</title>
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #101322;
+            --panel: #191d30;
+            --panel2: #20253b;
+            --border: #303650;
+            --text: #f4f5ff;
+            --muted: #a5acc5;
+            --blue: #6685ff;
+            --purple: #9b72f2;
+            --green: #7ee0b0;
+            --red: #ff9d9d;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background:
+                radial-gradient(ellipse at 15% 0%, #29234b 0, transparent 38%),
+                radial-gradient(ellipse at 100% 15%, #1b3151 0, transparent 32%),
+                var(--bg);
+            color: var(--text);
+        }
+
+        button, textarea { font: inherit; }
+
+        button { cursor: pointer; }
+
+        button:focus-visible, textarea:focus-visible {
+            outline: 2px solid #9aaeff;
+            outline-offset: 3px;
+        }
+
+        .container {
+            width: min(1120px, 100%);
+            margin: 0 auto;
+            padding: 34px 22px 24px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 34px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .brand-icon {
+            display: grid;
+            place-items: center;
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--blue), var(--purple));
+            font-size: 26px;
+            box-shadow: 0 8px 28px #7867ef40;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(25px, 4vw, 34px);
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .status-pill {
+            padding: 9px 13px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: #d9ddf5;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .intro { margin: 0 0 23px; }
+
+        .intro h2 {
+            margin: 0 0 8px;
+            font-size: clamp(23px, 4vw, 31px);
+            letter-spacing: -.6px;
+        }
+
+        .intro p {
+            max-width: 720px;
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .card {
+            min-width: 0;
+            padding: 24px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: linear-gradient(160deg, #1b2034f5, #171b2cf5);
+            box-shadow: 0 18px 55px #00000020;
+        }
+
+        .section-title {
+            margin: 0 0 7px;
+            font-size: 19px;
+        }
+
+        .section-help {
+            margin: 0 0 22px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: 650;
+        }
+
+        textarea {
+            display: block;
+            width: 100%;
+            min-height: 165px;
+            padding: 15px;
+            resize: vertical;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            background: #101423;
+            color: var(--text);
+            line-height: 1.65;
+        }
+
+        textarea::placeholder { color: #7e86a4; }
+
+        .counter {
+            margin-top: 8px;
+            color: var(--muted);
+            text-align: right;
+            font-size: 12px;
+        }
+
+        .examples-title {
+            margin: 22px 0 10px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .7px;
+        }
+
+        .examples {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .example {
+            padding: 9px 11px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #242941;
+            color: #e1e5ff;
+            font-size: 12px;
+            transition: border-color .2s, background .2s;
+        }
+
+        .example:hover {
+            border-color: var(--blue);
+            background: #2b3150;
+        }
+
+        .primary, .secondary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            min-height: 47px;
+            padding: 12px 17px;
+            border: 0;
+            border-radius: 12px;
+            font-weight: 700;
+            transition: filter .2s, transform .2s;
+        }
+
+        .primary {
+            width: 100%;
+            margin-top: 20px;
+            background: linear-gradient(100deg, var(--blue), var(--purple));
+            color: white;
+        }
+
+        .primary:hover, .secondary:hover {
+            filter: brightness(1.1);
+        }
+
+        .primary:disabled {
+            opacity: .65;
+            cursor: wait;
+        }
+
+        .secondary {
+            border: 1px solid var(--border);
+            background: #252b43;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .status {
+            display: none;
+            margin-top: 16px;
+            padding: 13px 14px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            background: #111526;
+            color: #d8def8;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+
+        .status.sucesso { color: var(--green); }
+        .status.erro { color: var(--red); }
+
+        .result-card { min-height: 435px; }
+
+        .result-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .result-heading h2 {
+            margin: 0;
+            font-size: 19px;
+        }
+
+        .result-badge {
+            padding: 6px 9px;
+            border-radius: 7px;
+            background: #292e49;
+            color: #b9c5ff;
+            font-size: 11px;
+        }
+
+        .empty-state {
+            display: flex;
+            min-height: 330px;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 26px;
+            border: 1px dashed #3b4260;
+            border-radius: 15px;
+            background: #12162680;
+            text-align: center;
+        }
+
+        .empty-icon {
+            display: grid;
+            place-items: center;
+            width: 74px;
+            height: 74px;
+            margin-bottom: 17px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #6685ff24, #9b72f224);
+            font-size: 34px;
+        }
+
+        .empty-state h3 {
+            margin: 0 0 9px;
+            font-size: 16px;
+        }
+
+        .empty-state p {
+            max-width: 290px;
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .image-area { display: none; }
+
+        .image-area img {
+            display: block;
+            width: 100%;
+            max-height: 620px;
+            object-fit: contain;
+            border-radius: 13px;
+            background: #101423;
+        }
+
+        .image-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+            margin-top: 13px;
+        }
+
+        .image-actions .secondary { flex: 1; }
+
+        .history-section { margin-top: 24px; }
+
+        .history-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 13px;
+        }
+
+        .history-heading h2 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .history-heading span {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .history {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .history-item {
+            min-width: 0;
+            padding: 5px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            background: #121626;
+            color: var(--text);
+            text-align: left;
+        }
+
+        .history-item img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 7px;
+        }
+
+        .history-item span {
+            display: block;
+            padding: 7px 3px 4px;
+            overflow: hidden;
+            color: var(--muted);
+            font-size: 10px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-empty {
+            grid-column: 1 / -1;
+            padding: 17px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            color: var(--muted);
+            font-size: 12px;
+            text-align: center;
+        }
+
+        footer {
+            padding: 30px 0 8px;
+            color: var(--muted);
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        footer strong { color: #e5e8fb; }
+
+        @media (max-width: 800px) {
+            .workspace { grid-template-columns: 1fr; }
+            .result-card { min-height: 0; }
+            .empty-state { min-height: 240px; }
+        }
+
+        @media (max-width: 520px) {
+            .container { padding: 23px 14px; }
+            .header { align-items: flex-start; }
+            .brand { gap: 10px; }
+            .brand-icon { width: 43px; height: 43px; border-radius: 13px; }
+            .status-pill { display: none; }
+            .card { padding: 17px; border-radius: 16px; }
+            textarea { min-height: 145px; }
+            .history { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .image-actions { flex-direction: column; }
+        }
+
+        .rating-panel {
+            margin-top: 18px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            background: #121626;
+        }
+        .rating-panel h3 { margin: 0 0 7px; font-size: 15px; }
+        .rating-panel p { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+        .rating-options { display: flex; flex-wrap: wrap; gap: 6px; }
+        .rating-option {
+            min-width: 34px; padding: 8px 6px; border: 1px solid var(--border);
+            border-radius: 8px; background: #242941; color: var(--text);
+        }
+        .rating-option.selecionada { background: var(--blue); border-color: var(--blue); }
+        .rating-save { margin-top: 12px; }
+        .dashboard { margin-top: 28px; }
+        .dashboard-grid {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px; margin-top: 16px;
+        }
+        .metric {
+            padding: 18px; border: 1px solid var(--border); border-radius: 14px;
+            background: linear-gradient(145deg, #20253b, #171b2c);
+        }
+        .metric-label { color: var(--muted); font-size: 12px; }
+        .metric-value { margin-top: 8px; font-size: 27px; font-weight: 750; }
+        .chart { margin-top: 18px; padding: 18px; border: 1px solid var(--border);
+            border-radius: 14px; background: #121626; }
+        .chart h3 { margin: 0 0 16px; font-size: 15px; }
+        .bar-row { display: grid; grid-template-columns: 42px 1fr 28px;
+            align-items: center; gap: 10px; margin: 9px 0; font-size: 12px; }
+        .bar-track { height: 11px; overflow: hidden; border-radius: 99px; background: #292e49; }
+        .bar-fill { height: 100%; border-radius: 99px;
+            background: linear-gradient(90deg, var(--blue), var(--purple)); }
+        .persistent-history { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px; margin-top: 12px; }
+        .persistent-item { min-width: 0; padding: 6px; border: 1px solid var(--border);
+            border-radius: 10px; background: #121626; color: var(--text); text-align: left; }
+        .persistent-item img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 7px; }
+        .persistent-item span { display: block; margin-top: 6px; overflow-wrap: anywhere;
+            font-size: 11px; color: var(--muted); }
+        @media (max-width: 650px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .persistent-history { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+    </style>
+</head>
+
+<body>
+    <main class="container">
+        <header class="header">
+            <div class="brand">
+                <div class="brand-icon" aria-hidden="true">🎨</div>
+                <div>
+                    <h1>GeraArteIA</h1>
+                    <p class="subtitle">Inteligência artificial para transformar ideias em imagens</p>
+                </div>
+            </div>
+            <div class="status-pill">✦ Projeto acadêmico</div>
+        </header>
+
+        <section class="intro">
+            <h2>Sua imaginação, em imagens.</h2>
+            <p>
+                Descreva uma cena, um personagem ou uma ideia. O GeraArteIA
+                utiliza um modelo de difusão para transformar sua descrição em uma imagem.
+            </p>
+        </section>
+
+        <div class="workspace">
+            <section class="card">
+                <h2 class="section-title">Criar imagem</h2>
+                <p class="section-help">
+                    Quanto mais clara e detalhada for a descrição, melhor será a orientação para o modelo.
+                </p>
+
+                <label for="prompt">O que você quer criar?</label>
+                <textarea
+                    id="prompt"
+                    maxlength="1500"
+                    placeholder="Exemplo: Um cavalo marrom de corpo inteiro correndo em um campo verde ao pôr do sol, fotografia realista..."
+                    aria-describedby="contador"
+                ></textarea>
+                <div id="contador" class="counter">0 / 1500 caracteres</div>
+
+                <div class="examples-title">Experimente um exemplo</div>
+                <div class="examples">
+                    <button type="button" class="example" data-prompt="Uma girafa de corpo inteiro na savana africana, árvores ao fundo, luz natural, fotografia de vida selvagem">🦒 Girafa na savana</button>
+                    <button type="button" class="example" data-prompt="Um SUV rosa com um laço rosa elegante no capô, carro inteiro visível, fotografia realista em estúdio">🚙 SUV rosa</button>
+                    <button type="button" class="example" data-prompt="Uma onça-pintada em estilo de tatuagem artística, linhas detalhadas, composição limpa em fundo branco">🐆 Tatuagem de onça</button>
+                    <button type="button" class="example" data-prompt="Um ciclista pedalando em uma bicicleta completa, as duas rodas visíveis, em uma ciclovia ao ar livre, fotografia realista">🚴 Ciclista</button>
+                    <button type="button" class="example" data-prompt="Um cavalo marrom de corpo inteiro galopando em um campo verde, quatro patas visíveis, luz dourada do pôr do sol, fotografia realista">🐎 Cavalo no campo</button>
+                </div>
+
+                <button type="button" id="btnGerar" class="primary">
+                    <span aria-hidden="true">✦</span> Gerar imagem
+                </button>
+
+                <div id="status" class="status" role="status" aria-live="polite"></div>
+            </section>
+
+            <section class="card result-card">
+                <div class="result-heading">
+                    <h2>Resultado</h2>
+                    <span class="result-badge">Stable Diffusion 1.5</span>
+                </div>
+
+                <div id="estadoVazio" class="empty-state">
+                    <div class="empty-icon" aria-hidden="true">✧</div>
+                    <h3>Sua próxima criação começa aqui</h3>
+                    <p>Escreva uma descrição ou escolha um exemplo. A imagem gerada aparecerá neste espaço.</p>
+                </div>
+
+                <div id="areaImagem" class="image-area">
+                    <img id="imagemGerada" alt="Imagem criada pelo GeraArteIA">
+                    <div class="image-actions">
+                        <button type="button" id="btnBaixar" class="secondary">↓ Baixar imagem</button>
+                        <button type="button" id="btnLimpar" class="secondary">Limpar resultado</button>
+                    </div>
+
+                    <div class="rating-panel" id="ratingPanel">
+                        <h3>Avalie esta imagem</h3>
+                        <p>De 0 (insatisfeito) a 10 (muito satisfeito).</p>
+                        <div class="rating-options" id="ratingOptions" role="group" aria-label="Nota de satisfação">
+                            <button type="button" class="rating-option" data-nota="0" aria-pressed="false">0</button>
+                            <button type="button" class="rating-option" data-nota="1" aria-pressed="false">1</button>
+                            <button type="button" class="rating-option" data-nota="2" aria-pressed="false">2</button>
+                            <button type="button" class="rating-option" data-nota="3" aria-pressed="false">3</button>
+                            <button type="button" class="rating-option" data-nota="4" aria-pressed="false">4</button>
+                            <button type="button" class="rating-option" data-nota="5" aria-pressed="false">5</button>
+                            <button type="button" class="rating-option" data-nota="6" aria-pressed="false">6</button>
+                            <button type="button" class="rating-option" data-nota="7" aria-pressed="false">7</button>
+                            <button type="button" class="rating-option" data-nota="8" aria-pressed="false">8</button>
+                            <button type="button" class="rating-option" data-nota="9" aria-pressed="false">9</button>
+                            <button type="button" class="rating-option" data-nota="10" aria-pressed="false">10</button>
+                        </div>
+                        <button type="button" class="secondary rating-save" id="btnAvaliar">Salvar avaliação</button>
+                        <p id="ratingStatus" role="status" aria-live="polite" style="margin-top:10px"></p>
+                    </div>
+
+                </div>
+
+                <section class="history-section">
+                    <div class="history-heading">
+                        <h2>Imagens desta sessão</h2>
+                        <span id="totalHistorico">0 imagens</span>
+                    </div>
+                    <div id="historico" class="history">
+                        <div class="history-empty">As imagens geradas nesta sessão aparecerão aqui.</div>
+                    </div>
+                </section>
+            </section>
+        </div>
+
+
+        <section class="card dashboard">
+            <h2 class="section-title">Painel de resultados</h2>
+            <p class="section-help">Indicadores calculados com os registros salvos nesta instalação.</p>
+            <div class="dashboard-grid">
+                <div class="metric"><div class="metric-label">Imagens geradas</div><div class="metric-value" id="metricGeracoes">—</div></div>
+                <div class="metric"><div class="metric-label">Avaliações recebidas</div><div class="metric-value" id="metricAvaliacoes">—</div></div>
+                <div class="metric"><div class="metric-label">Média de satisfação</div><div class="metric-value" id="metricMedia">—</div></div>
+            </div>
+            <div class="chart">
+                <h3>Distribuição das notas</h3>
+                <div id="graficoSatisfacao"><p class="section-help">Carregando estatísticas...</p></div>
+            </div>
+        </section>
+
+        <section class="card dashboard">
+            <div class="history-heading">
+                <h2>Histórico salvo</h2>
+                <button type="button" class="secondary" id="btnAtualizarHistorico">Atualizar</button>
+            </div>
+            <p class="section-help">As últimas 30 imagens registradas no banco de dados.</p>
+            <div class="persistent-history" id="historicoPersistente">
+                <div class="history-empty">Carregando histórico...</div>
+            </div>
+        </section>
+
+        <footer>
+            <strong>GeraArteIA</strong><br>
+            Projeto acadêmico de geração de imagens por difusão.<br>
+            Desenvolvido por Walter Muniz Santos e Luan Jesus Pereira Gomes.
+        </footer>
+    </main>
+
+    <script>
+        const campoPrompt = document.getElementById("prompt");
+        const botaoGerar = document.getElementById("btnGerar");
+        const statusEl = document.getElementById("status");
+        const imagemEl = document.getElementById("imagemGerada");
+        const areaImagem = document.getElementById("areaImagem");
+        const estadoVazio = document.getElementById("estadoVazio");
+        const historicoEl = document.getElementById("historico");
+        const totalHistoricoEl = document.getElementById("totalHistorico");
+
+        let imagensDaSessao = [];
+        let imagemAtual = null;
+
+        campoPrompt.addEventListener("input", () => {
+            document.getElementById("contador").textContent =
+                `${campoPrompt.value.length} / 1500 caracteres`;
+        });
+
+        document.querySelectorAll(".example").forEach((botao) => {
+            botao.addEventListener("click", () => {
+                campoPrompt.value = botao.dataset.prompt || "";
+                campoPrompt.dispatchEvent(new Event("input"));
+                campoPrompt.focus();
+            });
+        });
+
+        function mostrarStatus(mensagem, tipo = "") {
+            statusEl.style.display = "block";
+            statusEl.className = "status" + (tipo ? " " + tipo : "");
+            statusEl.textContent = mensagem;
+        }
+
+        function mostrarImagem(url, prompt, id = null, nota = null) {
+            imagemAtual = { url, prompt, id, nota };
+            imagemEl.src = url;
+            areaImagem.style.display = "block";
+            estadoVazio.style.display = "none";
+            document.querySelectorAll(".rating-option").forEach((botao) => {
+                const selecionada = nota !== null && Number(botao.dataset.nota) === Number(nota);
+                botao.classList.toggle("selecionada", selecionada);
+                botao.setAttribute("aria-pressed", String(selecionada));
+            });
+            document.getElementById("ratingStatus").textContent =
+                nota === null ? "" : `Nota registrada: ${nota}/10`;
+        }
+
+        function atualizarHistorico() {
+            historicoEl.replaceChildren();
+            totalHistoricoEl.textContent =
+                `${imagensDaSessao.length} ${imagensDaSessao.length === 1 ? "imagem" : "imagens"}`;
+
+            if (imagensDaSessao.length === 0) {
+                const vazio = document.createElement("div");
+                vazio.className = "history-empty";
+                vazio.textContent = "As imagens geradas nesta sessão aparecerão aqui.";
+                historicoEl.appendChild(vazio);
+                return;
+            }
+
+            imagensDaSessao.forEach((item, indice) => {
+                const botao = document.createElement("button");
+                botao.type = "button";
+                botao.className = "history-item";
+                botao.title = item.prompt;
+
+                const miniatura = document.createElement("img");
+                miniatura.src = item.url;
+                miniatura.alt = `Imagem ${indice + 1} do histórico`;
+                miniatura.loading = "lazy";
+
+                const legenda = document.createElement("span");
+                legenda.textContent = item.prompt || `Imagem ${indice + 1}`;
+
+                botao.append(miniatura, legenda);
+                botao.addEventListener("click", () => {
+                    mostrarImagem(item.url, item.prompt, item.id, item.nota);
+                    mostrarStatus("Imagem selecionada no histórico.", "sucesso");
+                });
+                historicoEl.appendChild(botao);
+            });
+        }
+
+        async function gerarImagem() {
+            const prompt = campoPrompt.value.trim();
+
+            if (!prompt) {
+                mostrarStatus("Digite uma descrição ou escolha um dos exemplos antes de gerar a imagem.", "erro");
+                campoPrompt.focus();
+                return;
+            }
+
+            botaoGerar.disabled = true;
+            botaoGerar.textContent = "⏳ Gerando imagem...";
+            mostrarStatus("Preparando o modelo e gerando sua imagem. Esse processo pode levar alguns minutos.");
+            areaImagem.style.display = "none";
+
+            try {
+                const resposta = await fetch("/api/gerar", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({ prompt })
+                });
+
+                const tipo = resposta.headers.get("content-type") || "";
+                const corpo = await resposta.text();
+                let dados;
+
+                if (tipo.includes("application/json")) {
+                    try {
+                        dados = JSON.parse(corpo);
+                    } catch {
+                        throw new Error("O servidor retornou uma resposta JSON inválida.");
+                    }
+                } else {
+                    console.error("Resposta inesperada do servidor:", corpo);
+                    throw new Error(
+                        "O servidor não retornou JSON. Verifique se a aplicação FastAPI está funcionando."
+                    );
+                }
+
+                if (!resposta.ok) {
+                    throw new Error(dados.detail || dados.message || "Não foi possível gerar a imagem.");
+                }
+
+                if (!dados.imagem) {
+                    throw new Error("A API não informou o endereço da imagem gerada.");
+                }
+
+                const urlImagem = dados.imagem + (dados.imagem.includes("?") ? "&" : "?") + "t=" + Date.now();
+                mostrarImagem(urlImagem, prompt, dados.id, null);
+
+                imagensDaSessao.unshift({
+                    url: urlImagem,
+                    prompt,
+                    id: dados.id,
+                    nota: null,
+                    arquivo: dados.arquivo || ""
+                });
+                atualizarHistorico();
+
+                mostrarStatus("Imagem gerada com sucesso!", "sucesso");
+            } catch (erro) {
+                console.error("Erro no GeraArteIA:", erro);
+                mostrarStatus("Erro: " + erro.message, "erro");
+            } finally {
+                botaoGerar.disabled = false;
+                botaoGerar.innerHTML = "<span aria-hidden=\"true\">✦</span> Gerar imagem";
+            }
+        }
+
+        botaoGerar.addEventListener("click", gerarImagem);
+
+        document.getElementById("btnBaixar").addEventListener("click", () => {
+            if (!imagemAtual) {
+                mostrarStatus("Gere uma imagem antes de tentar baixar.", "erro");
+                return;
+            }
+
+            const link = document.createElement("a");
+            link.href = imagemAtual.url.split("?")[0];
+            link.download = imagemAtual.arquivo || "geraarteia.png";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        });
+
+        document.getElementById("btnLimpar").addEventListener("click", () => {
+            imagemAtual = null;
+            imagemEl.removeAttribute("src");
+            areaImagem.style.display = "none";
+            estadoVazio.style.display = "flex";
+            campoPrompt.value = "";
+            campoPrompt.dispatchEvent(new Event("input"));
+            statusEl.style.display = "none";
+        });
+
+        campoPrompt.addEventListener("keydown", (evento) => {
+            if ((evento.ctrlKey || evento.metaKey) && evento.key === "Enter") {
+                gerarImagem();
+            }
+        });
+
+        let notaSelecionada = null;
+
+        document.querySelectorAll(".rating-option").forEach((botao) => {
+            botao.addEventListener("click", () => {
+                notaSelecionada = Number(botao.dataset.nota);
+                document.querySelectorAll(".rating-option").forEach((opcao) => {
+                    const ativa = opcao === botao;
+                    opcao.classList.toggle("selecionada", ativa);
+                    opcao.setAttribute("aria-pressed", String(ativa));
+                });
+            });
+        });
+
+        document.getElementById("btnAvaliar").addEventListener("click", async () => {
+            const status = document.getElementById("ratingStatus");
+            if (!imagemAtual || !imagemAtual.id) {
+                status.textContent = "Selecione uma imagem gerada nesta versão para avaliá-la.";
+                return;
+            }
+            if (notaSelecionada === null) {
+                status.textContent = "Escolha uma nota de 0 a 10.";
+                return;
+            }
+            try {
+                const resposta = await fetch("/api/avaliar", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({geracao_id: imagemAtual.id, nota: notaSelecionada})
+                });
+                const dados = await resposta.json();
+                if (!resposta.ok) throw new Error(dados.detail || "Não foi possível salvar a nota.");
+                imagemAtual.nota = notaSelecionada;
+                const item = imagensDaSessao.find((x) => x.id === imagemAtual.id);
+                if (item) item.nota = notaSelecionada;
+                status.textContent = `Avaliação ${notaSelecionada}/10 salva com sucesso.`;
+                await carregarDashboard();
+                await carregarHistoricoPersistente();
+            } catch (erro) {
+                status.textContent = "Erro ao salvar avaliação: " + erro.message;
+            }
+        });
+
+        async function carregarDashboard() {
+            const resposta = await fetch("/api/dashboard");
+            if (!resposta.ok) throw new Error("Falha ao consultar o painel.");
+            const dados = await resposta.json();
+            document.getElementById("metricGeracoes").textContent = dados.total_geracoes;
+            document.getElementById("metricAvaliacoes").textContent = dados.total_avaliacoes;
+            document.getElementById("metricMedia").textContent =
+                dados.media_satisfacao === null ? "—" : `${Number(dados.media_satisfacao).toFixed(1)}/10`;
+
+            const contagens = Array.from({length: 11}, (_, nota) => {
+                const registro = dados.avaliacoes.find((x) => Number(x.nota) === nota);
+                return {nota, quantidade: registro ? registro.quantidade : 0};
+            });
+            const maximo = Math.max(1, ...contagens.map((x) => x.quantidade));
+            const grafico = document.getElementById("graficoSatisfacao");
+            grafico.replaceChildren();
+            contagens.forEach(({nota, quantidade}) => {
+                const linha = document.createElement("div");
+                linha.className = "bar-row";
+                const rotulo = document.createElement("span");
+                rotulo.textContent = `${nota}/10`;
+                const trilho = document.createElement("div");
+                trilho.className = "bar-track";
+                const barra = document.createElement("div");
+                barra.className = "bar-fill";
+                barra.style.width = `${quantidade / maximo * 100}%`;
+                trilho.appendChild(barra);
+                const valor = document.createElement("span");
+                valor.textContent = quantidade;
+                linha.append(rotulo, trilho, valor);
+                grafico.appendChild(linha);
+            });
+        }
+
+        async function carregarHistoricoPersistente() {
+            const area = document.getElementById("historicoPersistente");
+            const resposta = await fetch("/api/historico");
+            if (!resposta.ok) throw new Error("Falha ao carregar o histórico.");
+            const itens = await resposta.json();
+            area.replaceChildren();
+            if (!itens.length) {
+                const vazio = document.createElement("div");
+                vazio.className = "history-empty";
+                vazio.textContent = "Nenhuma imagem foi salva ainda. Gere a primeira imagem para iniciar o histórico.";
+                area.appendChild(vazio);
+                return;
+            }
+            itens.forEach((item) => {
+                const botao = document.createElement("button");
+                botao.type = "button";
+                botao.className = "persistent-item";
+                const img = document.createElement("img");
+                img.loading = "lazy";
+                img.src = item.imagem;
+                img.alt = item.prompt;
+                const legenda = document.createElement("span");
+                legenda.textContent = `${item.prompt} · ${item.nota === null ? "Sem nota" : "Nota " + item.nota + "/10"}`;
+                botao.append(img, legenda);
+                botao.addEventListener("click", () => {
+                    campoPrompt.value = item.prompt;
+                    campoPrompt.dispatchEvent(new Event("input"));
+                    mostrarImagem(item.imagem, item.prompt, item.id, item.nota);
+                    notaSelecionada = item.nota === null ? null : Number(item.nota);
+                    areaImagem.scrollIntoView({behavior: "smooth", block: "center"});
+                });
+                area.appendChild(botao);
+            });
+        }
+
+        document.getElementById("btnAtualizarHistorico").addEventListener("click", async () => {
+            try {
+                await carregarHistoricoPersistente();
+                mostrarStatus("Histórico atualizado.", "sucesso");
+            } catch (erro) {
+                mostrarStatus(erro.message, "erro");
+            }
+        });
+
+        // Atualiza o painel e o histórico sem exigir uma geração de imagem.
+        Promise.all([carregarDashboard(), carregarHistoricoPersistente()])
+            .catch((erro) => console.error("Falha ao carregar painel/histórico:", erro));
+
+    </script>
+</body>
+</html>

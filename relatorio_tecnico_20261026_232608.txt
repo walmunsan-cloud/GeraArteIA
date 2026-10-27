@@ -1,0 +1,422 @@
+﻿RELATORIO TECNICO GERAARTEIA - 20261026_232608
+
+===== STATUS GIT =====
+ M app/config.py
+ M app/generator.py
+ M app/prompt_optimizer.py
+ M tests/test_generator.py
+ M web/templates/index.html
+ M web_app.py
+?? aplicar_progresso.py
+?? app/database.py
+?? atualizar_interface.py
+?? backups/
+?? geraarteia.db
+?? relatorio_tecnico_20261026_232608.txt
+
+
+===== VERSAO PYTHON =====
+Python 3.11.9
+
+
+===== DEPENDENCIAS PRINCIPAIS =====
+torch: 2.7.1+cu118
+diffusers: 0.39.0
+transformers: 5.14.1
+CUDA disponivel: False
+
+
+===== TESTES AUTOMATIZADOS =====
+........                                                                 [100%]
+8 passed in 0.03s
+
+
+===== SINTAXE PYTHON =====
+
+
+===== CONFIGURACAO =====
+from pathlib import Path
+import torch
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MODELS_DIR = BASE_DIR / "models"
+OUTPUTS_DIR = BASE_DIR / "outputs"
+
+OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+GPU_NAME = (
+    torch.cuda.get_device_name(0)
+    if torch.cuda.is_available()
+    else "CPU"
+)
+
+MODEL_PATH = "stable-diffusion-v1-5/stable-diffusion-v1-5"
+
+IMAGE_WIDTH = 512
+IMAGE_HEIGHT = 512
+
+NUM_INFERENCE_STEPS = 28
+GUIDANCE_SCALE = 7.0
+SEED = 42
+
+NEGATIVE_PROMPT = (
+    "blurry, low quality, distorted, deformed, bad anatomy, "
+    "bad proportions, extra limbs, extra fingers, malformed hands, "
+    "missing limbs, missing legs, extra legs, fused legs, "
+    "twisted legs, malformed hooves, extra hooves, " +
+    "deformed horse legs, duplicated horse legs, broken joints, " +
+    "unnatural equine anatomy, overlapping legs, floating hooves, cropped, "
+    "cut off, close-up, zoomed in, text, watermark, logo"
+)
+
+
+===== OTIMIZADOR =====
+import re
+import unicodedata
+
+
+class PromptOptimizer:
+    def __init__(self):
+        self.animal_keywords = [
+            "cavalo", "cavalos", "egua", "eguas", "potro", "potros",
+            "cachorro", "cao", "caes", "gato", "gatos", "leao", "leoes",
+            "tigre", "tigres", "onca", "oncas", "jaguar", "jaguares",
+            "elefante", "elefantes", "girafa", "girafas", "zebra", "zebras",
+            "boi", "bois", "vaca", "vacas", "touro", "touros",
+            "urso", "ursos", "lobo", "lobos", "passaro", "passaros",
+            "animal", "animais",
+        ]
+        self.person_keywords = [
+            "homem", "mulher", "menino", "menina", "crianca",
+            "pessoa", "pessoas", "jovem", "idoso", "idosa",
+            "rapaz", "moca", "ciclista",
+        ]
+        self.vehicle_keywords = [
+            "carro", "carros", "automovel", "veiculo", "suv",
+            "moto", "motocicleta", "caminhao", "onibus",
+            "bicicleta", "bicicletas", "bike",
+            "aviao", "avioes", "helicoptero", "barco", "navio",
+        ]
+        self.landscape_keywords = [
+            "paisagem", "praia", "montanha", "floresta", "campo",
+            "cidade", "deserto", "lago", "rio", "cachoeira", "savana",
+            "pastagem", "pasto", "ciclovia",
+        ]
+        self.object_keywords = [
+            "mesa", "cadeira", "computador", "celular", "telefone",
+            "relogio", "copo", "garrafa", "livro", "camera",
+            "laco", "lacinho", "gravata", "brinco",
+        ]
+
+    @staticmethod
+    def _normalizar(texto: str) -> str:
+        texto = unicodedata.normalize("NFKD", texto.lower())
+        texto = "".join(c for c in texto if not unicodedata.combining(c))
+        return re.sub(r"\s+", " ", texto).strip()
+
+    def detectar_categoria(self, texto: str) -> str:
+        normalizado = self._normalizar(texto)
+        grupos = [
+            ("animal", self.animal_keywords),
+            ("pessoa", self.person_keywords),
+            ("veiculo", self.vehicle_keywords),
+            ("paisagem", self.landscape_keywords),
+            ("objeto", self.object_keywords),
+        ]
+        categorias = [
+            categoria
+            for categoria, palavras in grupos
+            if any(self._normalizar(p) in normalizado for p in palavras)
+        ]
+        if any(x in normalizado for x in ("tatuagem", "tattoo")):
+            categorias.append("tatuagem")
+        return "+".join(dict.fromkeys(categorias)) if categorias else "geral"
+
+    def otimizar(self, prompt: str) -> str:
+        prompt = re.sub(r"\s+", " ", prompt.strip())
+        if not prompt:
+            return ""
+
+        texto = self._normalizar(prompt)
+        categoria = self.detectar_categoria(prompt)
+        extras = []
+
+        if "animal" in categoria:
+            extras.extend([
+                "realistic animal anatomy",
+                "full body animal",
+                "complete head and face",
+                "natural body proportions",
+                "wide shot",
+                "entire body visible",
+                "space around the subject",
+            ])
+
+        if any(x in texto for x in ("cavalo", "cavalos", "egua", "eguas", "potro", "potros")):
+            extras.extend([
+                "photorealistic horse",
+                "anatomically plausible horse with four legs",
+                "four separate legs attached naturally to the body",
+                "realistic horse joints and correctly shaped hooves",
+                "clear silhouette and natural horse proportions",
+                "full body horse visible, head to hooves",
+                "side view, camera at horse level",
+                "simple uncluttered background",
+            ])
+
+            if any(x in texto for x in ("correndo", "galopando", "galope", "corrida")):
+                extras.extend([
+                    "realistic galloping horse",
+                    "natural coordinated leg positions",
+                    "clear separation between visible legs",
+                ])
+            elif any(x in texto for x in ("parado", "pastando", "em pe", "em pÃ©")):
+                extras.append("horse standing naturally on four legs")
+
+        if "girafa" in texto:
+            extras.extend([
+                "long natural giraffe neck",
+                "four visible legs",
+                "entire giraffe visible",
+            ])
+            if "savana" in texto:
+                extras.append("savanna landscape")
+
+        if "onca" in texto or "jaguar" in texto:
+            if "tatuagem" in texto or "tattoo" in texto:
+                extras.extend([
+                    "tattoo design",
+                    "clear jaguar illustration",
+                    "clean tattoo linework",
+                    "design on skin",
+                ])
+
+        if "pessoa" in categoria:
+            extras.extend(["natural human anatomy", "natural body proportions"])
+
+        if "veiculo" in categoria:
+            extras.extend([
+                "complete vehicle visible from front to rear",
+                "correct vehicle proportions",
+                "wide shot with space around the vehicle",
+            ])
+
+        if any(x in texto for x in ("bicicleta", "bike", "ciclista", "biciclista")):
+            extras.extend([
+                "complete bicycle with both wheels visible",
+                "cyclist riding in a designated bike lane",
+                "natural riding posture",
+            ])
+
+        if "paisagem" in categoria:
+            extras.append("natural perspective and coherent environment")
+
+        if any(x in texto for x in ("laco", "lacinho")):
+            extras.append("clearly visible bow accessory")
+
+        if "rosa" in texto and "veiculo" in categoria:
+            extras.append("vehicle paint is pink, preserve requested color")
+
+        if "futurista" in texto:
+            extras.append("futuristic")
+        if "a noite" in texto:
+            extras.append("night scene")
+        if "por do sol" in texto:
+            extras.append("sunset")
+        if "nascer do sol" in texto:
+            extras.append("sunrise")
+        if "fotografia" in texto or "foto" in texto:
+            extras.append("photorealistic")
+        if "cinematografico" in texto or "cinematografica" in texto:
+            extras.append("cinematic")
+
+        resultado = [prompt]
+        vistos = {self._normalizar(prompt)}
+        for extra in extras:
+            chave = self._normalizar(extra)
+            if chave not in vistos:
+                resultado.append(extra)
+                vistos.add(chave)
+
+        return ", ".join(resultado)
+
+
+===== GERADOR =====
+import time
+
+import torch
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+
+from .config import (
+    MODEL_PATH,
+    OUTPUTS_DIR,
+    DEVICE,
+    IMAGE_WIDTH,
+    IMAGE_HEIGHT,
+    NUM_INFERENCE_STEPS,
+    GUIDANCE_SCALE,
+    SEED,
+    NEGATIVE_PROMPT,
+)
+
+from .prompt_optimizer import PromptOptimizer
+
+
+class GeraArteIA:
+
+    def __init__(self, model_id: str = MODEL_PATH):
+        self.model_id = model_id
+        self.pipe = None
+        self.prompt_optimizer = PromptOptimizer()
+
+    def carregar_modelo(self):
+
+        print("Carregando modelo local...")
+        print(f"Modelo: {self.model_id}")
+        print(f"Dispositivo: {DEVICE}")
+
+        dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+
+        self.pipe = StableDiffusionPipeline.from_pretrained(
+            self.model_id,
+            torch_dtype=dtype,
+            use_safetensors=True,
+        )
+
+        # Scheduler otimizado
+        self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+            self.pipe.scheduler.config
+        )
+
+        if DEVICE == "cuda":
+            # OtimizaÃ§Ãµes para a GTX 960 com 2 GB de VRAM
+            self.pipe.enable_sequential_cpu_offload()
+            self.pipe.enable_attention_slicing()
+
+        print("Modelo carregado com sucesso.")
+        print("Modo offline ativado.")
+
+    def gerar(
+        self,
+        prompt: str,
+        nome_arquivo: str = "imagem_gerada.png",
+        callback_progresso=None,
+    ):
+
+        if self.pipe is None:
+            raise RuntimeError(
+                "O modelo ainda nÃ£o foi carregado."
+            )
+
+        # OtimizaÃ§Ã£o automÃ¡tica do prompt
+        prompt_original = prompt
+        prompt_final = self.prompt_optimizer.otimizar(prompt)
+
+        # O CLIP do Stable Diffusion 1.5 suporta no mÃ¡ximo 77 tokens.
+        # O prompt Ã© limitado antes da inferÃªncia para evitar truncamento.
+        tokens = self.pipe.tokenizer(
+            prompt_final,
+            truncation=True,
+            max_length=77,
+            add_special_tokens=True,
+        )
+
+        prompt_final = self.pipe.tokenizer.decode(
+            tokens["input_ids"],
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        ).strip()
+
+        categoria = self.prompt_optimizer.detectar_categoria(
+            prompt_original
+        )
+
+        print()
+        print("========================================")
+        print("INICIANDO GERAÃ‡ÃƒO")
+        print("========================================")
+        print(f"Prompt original: {prompt_original}")
+        print(f"Categoria detectada: {categoria}")
+        print(f"Prompt otimizado: {prompt_final}")
+        print(f"Steps: {NUM_INFERENCE_STEPS}")
+        print(f"Guidance Scale: {GUIDANCE_SCALE}")
+        print(f"Seed: {SEED}")
+
+        inicio = time.perf_counter()
+
+        generator = torch.Generator(
+            device="cpu"
+        ).manual_seed(SEED)
+
+        def acompanhar_etapa(pipe, etapa, timestep, callback_kwargs):
+            if callback_progresso is not None:
+                percentual = int((etapa + 1) / NUM_INFERENCE_STEPS * 100)
+                callback_progresso(
+                    percentual,
+                    etapa + 1,
+                    NUM_INFERENCE_STEPS,
+                )
+            return callback_kwargs
+
+        resultado = self.pipe(
+            prompt=prompt_final,
+            negative_prompt=NEGATIVE_PROMPT,
+            width=IMAGE_WIDTH,
+            height=IMAGE_HEIGHT,
+            num_inference_steps=NUM_INFERENCE_STEPS,
+            guidance_scale=GUIDANCE_SCALE,
+            generator=generator,
+            callback_on_step_end=acompanhar_etapa,
+        )
+
+        imagem = resultado.images[0]
+
+        caminho = OUTPUTS_DIR / nome_arquivo
+
+        imagem.save(caminho)
+
+        tempo = time.perf_counter() - inicio
+
+        print()
+        print("========================================")
+        print("IMAGEM GERADA COM SUCESSO!")
+        print("========================================")
+        print(f"Arquivo: {caminho}")
+        print(f"Tempo: {tempo:.2f} segundos")
+
+        if torch.cuda.is_available():
+
+            memoria = (
+                torch.cuda.max_memory_allocated()
+                / 1024**3
+            )
+
+            print(f"Pico de VRAM: {memoria:.2f} GB")
+
+            torch.cuda.reset_peak_memory_stats()
+
+        return caminho
+
+
+===== ROTAS DA APLICACAO =====
+@app.get("/")
+def inicio(request: Request):
+@app.get("/api/status")
+def status():
+@app.get("/api/progresso")
+def consultar_progresso():
+@app.post("/api/gerar")
+def gerar_imagem(pedido: PedidoImagem):
+        def atualizar_progresso(percentual, etapa, total):
+@app.post("/api/avaliar")
+def avaliar(pedido: PedidoAvaliacao):
+@app.get("/api/historico")
+def historico():
+@app.get("/api/dashboard")
+def dashboard():
+@app.get("/api/imagem/{nome_arquivo}")
+def imagem(nome_arquivo: str):
+

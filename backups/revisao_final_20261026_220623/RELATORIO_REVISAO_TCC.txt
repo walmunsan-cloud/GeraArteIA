@@ -1,0 +1,1865 @@
+﻿RELATORIO DE REVISAO DO GERAARTEIA
+Data: 26/10/2026 22:06:23
+
+
+========== app\config.py ==========
+from pathlib import Path
+import torch
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MODELS_DIR = BASE_DIR / "models"
+OUTPUTS_DIR = BASE_DIR / "outputs"
+
+OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+GPU_NAME = (
+    torch.cuda.get_device_name(0)
+    if torch.cuda.is_available()
+    else "CPU"
+)
+
+MODEL_PATH = "stable-diffusion-v1-5/stable-diffusion-v1-5"
+
+IMAGE_WIDTH = 512
+IMAGE_HEIGHT = 512
+
+NUM_INFERENCE_STEPS = 28
+GUIDANCE_SCALE = 7.0
+SEED = 42
+
+NEGATIVE_PROMPT = (
+    "blurry, low quality, distorted, deformed, bad anatomy, "
+    "bad proportions, extra limbs, extra fingers, malformed hands, "
+    "missing limbs, missing legs, extra legs, fused legs, "
+    "twisted legs, malformed hooves, extra hooves, cropped, "
+    "cut off, close-up, zoomed in, text, watermark, logo"
+)
+
+
+
+========== app\prompt_optimizer.py ==========
+import re
+import unicodedata
+
+
+class PromptOptimizer:
+    def __init__(self):
+        self.animal_keywords = [
+            "cavalo", "cavalos", "?gua", "?guas", "potro", "potros",
+            "cachorro", "c?o", "c?es", "gato", "gatos", "le?o", "le?es",
+            "tigre", "tigres", "on?a", "on?as", "elefante", "elefantes",
+            "girafa", "girafas", "zebra", "zebras", "boi", "bois",
+            "vaca", "vacas", "touro", "touros", "urso", "ursos",
+            "lobo", "lobos", "macaco", "macacos", "p?ssaro", "p?ssaros",
+            "animal", "animais",
+        ]
+        self.person_keywords = [
+            "homem", "mulher", "menino", "menina", "crian?a",
+            "pessoa", "pessoas", "jovem", "idoso", "idosa",
+            "rapaz", "mo?a", "ciclista",
+        ]
+        self.vehicle_keywords = [
+            "carro", "carros", "autom?vel", "ve?culo", "suv",
+            "moto", "motocicleta", "caminh?o", "?nibus", "bicicleta",
+            "bicicletas", "bike", "biciclista", "ciclista", "avi?o", "avi?es",
+            "helic?ptero", "barco", "navio",
+        ]
+        self.landscape_keywords = [
+            "paisagem", "praia", "montanha", "floresta", "campo",
+            "cidade", "deserto", "lago", "rio", "cachoeira", "savana",
+        ]
+        self.object_keywords = [
+            "mesa", "cadeira", "computador", "celular", "telefone",
+            "rel?gio", "copo", "garrafa", "livro", "c?mera",
+            "la?o", "lacinho", "gravata", "brinco",
+        ]
+
+    @staticmethod
+    def _normalizar(texto: str) -> str:
+        texto = unicodedata.normalize("NFKD", texto.lower())
+        return "".join(
+            c for c in texto if not unicodedata.combining(c)
+        )
+
+    def detectar_categoria(self, texto: str) -> str:
+        normalizado = self._normalizar(texto)
+        grupos = [
+            ("animal", self.animal_keywords),
+            ("pessoa", self.person_keywords),
+            ("veiculo", self.vehicle_keywords),
+            ("paisagem", self.landscape_keywords),
+            ("objeto", self.object_keywords),
+        ]
+        categorias = [
+            categoria for categoria, palavras in grupos
+            if any(self._normalizar(p) in normalizado for p in palavras)
+        ]
+        return "+".join(categorias) if categorias else "geral"
+
+    def otimizar(self, prompt: str) -> str:
+        prompt = re.sub(r"\s+", " ", prompt.strip())
+        if not prompt:
+            return ""
+
+        texto = self._normalizar(prompt)
+        categoria = self.detectar_categoria(prompt)
+
+        # Mant?m o pedido original e acrescenta apenas poucas instru??es.
+        extras = []
+        if "animal" in categoria:
+            extras.extend(["realistic animal anatomy", "full body animal", "complete head and face", "wide shot", "entire body visible", "space around the subject"])
+        if any(x in texto for x in ["cavalo", "cavalos", "egua", "eguas", "potro", "potros"]):
+            extras.append("four visible legs and natural hooves")
+        if "girafa" in texto or "girafas" in texto:
+            extras.append("long neck and four visible legs")
+            if "savana" in texto:
+                extras.append("savanna landscape")
+        if "pessoa" in categoria:
+            extras.append("natural human anatomy")
+        if "veiculo" in categoria:
+            extras.append("complete vehicle visible")
+        if any(x in texto for x in ["bicicleta", "bicicletas", "bike", "ciclista", "biciclista"]):
+            extras.append("complete bicycle with both wheels visible")
+        if "paisagem" in categoria:
+            extras.append("natural perspective")
+        if any(x in texto for x in ["lacinho", "laco"]):
+            extras.append("clearly visible separate bow accessory")
+        if "futurista" in texto:
+            extras.append("futuristic")
+        if "a noite" in texto:
+            extras.append("night scene")
+        if "por do sol" in texto:
+            extras.append("sunset")
+        if "nascer do sol" in texto:
+            extras.append("sunrise")
+        if "fotografia" in texto or "foto" in texto:
+            extras.append("photorealistic")
+        if "cinematografico" in texto or "cinematografica" in texto:
+            extras.append("cinematic")
+
+        # Remove complementos duplicados sem apagar a descri??o original.
+        resultado = [prompt]
+        vistos = {self._normalizar(prompt)}
+        for extra in extras:
+            chave = self._normalizar(extra)
+            if chave not in vistos:
+                resultado.append(extra)
+                vistos.add(chave)
+
+        # Limite conservador de palavras para reduzir risco de truncamento.
+        palavras = " ".join(resultado).split()
+        if len(palavras) > 45:
+            palavras_originais = prompt.split()
+            restantes = max(0, 45 - len(palavras_originais))
+            return " ".join(palavras_originais + " ".join(resultado[1:]).split()[:restantes])
+
+        return ", ".join(resultado)
+
+
+
+========== app\generator.py ==========
+import time
+
+import torch
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+
+from .config import (
+    MODEL_PATH,
+    OUTPUTS_DIR,
+    DEVICE,
+    IMAGE_WIDTH,
+    IMAGE_HEIGHT,
+    NUM_INFERENCE_STEPS,
+    GUIDANCE_SCALE,
+    SEED,
+    NEGATIVE_PROMPT,
+)
+
+from .prompt_optimizer import PromptOptimizer
+
+
+class GeraArteIA:
+
+    def __init__(self, model_id: str = MODEL_PATH):
+        self.model_id = model_id
+        self.pipe = None
+        self.prompt_optimizer = PromptOptimizer()
+
+    def carregar_modelo(self):
+
+        print("Carregando modelo local...")
+        print(f"Modelo: {self.model_id}")
+        print(f"Dispositivo: {DEVICE}")
+
+        dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+
+        self.pipe = StableDiffusionPipeline.from_pretrained(
+            self.model_id,
+            torch_dtype=dtype,
+            use_safetensors=True,
+        )
+
+        # Scheduler otimizado
+        self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+            self.pipe.scheduler.config
+        )
+
+        if DEVICE == "cuda":
+            # OtimizaÃ§Ãµes para a GTX 960 com 2 GB de VRAM
+            self.pipe.enable_sequential_cpu_offload()
+            self.pipe.enable_attention_slicing()
+
+        print("Modelo carregado com sucesso.")
+        print("Modo offline ativado.")
+
+    def gerar(
+        self,
+        prompt: str,
+        nome_arquivo: str = "imagem_gerada.png"
+    ):
+
+        if self.pipe is None:
+            raise RuntimeError(
+                "O modelo ainda nÃ£o foi carregado."
+            )
+
+        # OtimizaÃ§Ã£o automÃ¡tica do prompt
+        prompt_original = prompt
+        prompt_final = self.prompt_optimizer.otimizar(prompt)
+
+        # O CLIP do Stable Diffusion 1.5 suporta no mÃ¡ximo 77 tokens.
+        # O prompt Ã© limitado antes da inferÃªncia para evitar truncamento.
+        tokens = self.pipe.tokenizer(
+            prompt_final,
+            truncation=True,
+            max_length=77,
+            add_special_tokens=True,
+        )
+
+        prompt_final = self.pipe.tokenizer.decode(
+            tokens["input_ids"],
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        ).strip()
+
+        categoria = self.prompt_optimizer.detectar_categoria(
+            prompt_original
+        )
+
+        print()
+        print("========================================")
+        print("INICIANDO GERAÃ‡ÃƒO")
+        print("========================================")
+        print(f"Prompt original: {prompt_original}")
+        print(f"Categoria detectada: {categoria}")
+        print(f"Prompt otimizado: {prompt_final}")
+        print(f"Steps: {NUM_INFERENCE_STEPS}")
+        print(f"Guidance Scale: {GUIDANCE_SCALE}")
+        print(f"Seed: {SEED}")
+
+        inicio = time.perf_counter()
+
+        generator = torch.Generator(
+            device="cpu"
+        ).manual_seed(SEED)
+
+        resultado = self.pipe(
+            prompt=prompt_final,
+            negative_prompt=NEGATIVE_PROMPT,
+            width=IMAGE_WIDTH,
+            height=IMAGE_HEIGHT,
+            num_inference_steps=NUM_INFERENCE_STEPS,
+            guidance_scale=GUIDANCE_SCALE,
+            generator=generator,
+        )
+
+        imagem = resultado.images[0]
+
+        caminho = OUTPUTS_DIR / nome_arquivo
+
+        imagem.save(caminho)
+
+        tempo = time.perf_counter() - inicio
+
+        print()
+        print("========================================")
+        print("IMAGEM GERADA COM SUCESSO!")
+        print("========================================")
+        print(f"Arquivo: {caminho}")
+        print(f"Tempo: {tempo:.2f} segundos")
+
+        if torch.cuda.is_available():
+
+            memoria = (
+                torch.cuda.max_memory_allocated()
+                / 1024**3
+            )
+
+            print(f"Pico de VRAM: {memoria:.2f} GB")
+
+            torch.cuda.reset_peak_memory_stats()
+
+        return caminho
+
+
+========== app\main.py ==========
+from datetime import datetime
+import os
+
+from .generator import GeraArteIA
+
+
+MODEL_ID = "stable-diffusion-v1-5/stable-diffusion-v1-5"
+
+
+def abrir_imagem(caminho):
+    """Abre a imagem gerada automaticamente no visualizador padrÃ£o do Windows."""
+    try:
+        os.startfile(str(caminho))
+    except Exception as erro:
+        print()
+        print(f"NÃ£o foi possÃ­vel abrir a imagem automaticamente: {erro}")
+
+
+def main():
+
+    print()
+    print("=" * 55)
+    print("                    GeraArteIA")
+    print("=" * 55)
+    print()
+    print("Carregando inteligÃªncia artificial...")
+    print()
+
+    gerador = GeraArteIA(MODEL_ID)
+
+    try:
+        gerador.carregar_modelo()
+    except Exception as erro:
+        print()
+        print("NÃ£o foi possÃ­vel carregar o modelo.")
+        print(f"Erro: {erro}")
+        return
+
+    while True:
+
+        print()
+        print("=" * 55)
+        print("              NOVA IMAGEM")
+        print("=" * 55)
+        print()
+        print("O que vocÃª deseja gerar?")
+        print()
+
+        prompt = input("> ").strip()
+
+        if not prompt:
+            print()
+            print("Digite uma descriÃ§Ã£o para gerar a imagem.")
+            continue
+
+        data_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        nome_arquivo = f"imagem_{data_hora}.png"
+
+        try:
+
+            caminho = gerador.gerar(
+                prompt=prompt,
+                nome_arquivo=nome_arquivo,
+            )
+
+            print()
+            print("=" * 55)
+            print("              IMAGEM PRONTA!")
+            print("=" * 55)
+            print()
+            print(f"Arquivo: {caminho}")
+            print()
+            print("Abrindo imagem...")
+
+            abrir_imagem(caminho)
+
+            print()
+            resposta = input("Deseja gerar outra imagem? (S/N): ").strip().lower()
+
+            if resposta not in ["s", "sim"]:
+                print()
+                print("=" * 55)
+                print("              GeraArteIA encerrado.")
+                print("=" * 55)
+                print()
+                break
+
+        except Exception as erro:
+
+            print()
+            print("=" * 55)
+            print("             ERRO NA GERAÃ‡ÃƒO")
+            print("=" * 55)
+            print()
+            print(f"Erro: {erro}")
+            print()
+
+            tentar = input("Deseja tentar novamente? (S/N): ").strip().lower()
+
+            if tentar not in ["s", "sim"]:
+                break
+
+
+if __name__ == "__main__":
+    main()
+
+
+========== web_app.py ==========
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+
+from app.config import MODEL_PATH, OUTPUTS_DIR
+from app.generator import GeraArteIA
+
+
+app = FastAPI(
+    title="GeraArteIA",
+    description="Sistema de geraÃ§Ã£o de imagens por inteligÃªncia artificial.",
+    version="1.0.0",
+)
+
+
+app.mount(
+    "/static",
+    StaticFiles(directory="web/static"),
+    name="static",
+)
+
+
+templates = Jinja2Templates(
+    directory="web/templates"
+)
+
+
+class PedidoImagem(BaseModel):
+    prompt: str
+
+
+gerador = GeraArteIA(MODEL_PATH)
+
+modelo_carregado = False
+
+
+@app.get("/")
+def inicio(request: Request):
+
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+    )
+
+
+@app.get("/api/status")
+def status():
+
+    return {
+        "sistema": "GeraArteIA",
+        "modelo": MODEL_PATH,
+        "modelo_carregado": modelo_carregado,
+    }
+
+
+@app.post("/api/gerar")
+def gerar_imagem(pedido: PedidoImagem):
+
+    global modelo_carregado
+
+    prompt = pedido.prompt.strip()
+
+    if not prompt:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Digite uma descriÃ§Ã£o para gerar a imagem.",
+        )
+
+    try:
+
+        if not modelo_carregado:
+
+            gerador.carregar_modelo()
+
+            modelo_carregado = True
+
+        data_hora = datetime.now().strftime(
+            "%Y%m%d_%H%M%S"
+        )
+
+        nome_arquivo = f"imagem_{data_hora}.png"
+
+        caminho = gerador.gerar(
+            prompt=prompt,
+            nome_arquivo=nome_arquivo,
+        )
+
+        return {
+            "sucesso": True,
+            "arquivo": caminho.name,
+            "imagem": f"/api/imagem/{caminho.name}",
+        }
+
+    except Exception as erro:
+
+        print(f"Erro na geraÃ§Ã£o: {erro}")
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(erro),
+        )
+
+
+@app.get("/api/imagem/{nome_arquivo}")
+def imagem(nome_arquivo: str):
+
+    caminho = OUTPUTS_DIR / nome_arquivo
+
+    if not caminho.exists():
+
+        raise HTTPException(
+            status_code=404,
+            detail="Imagem nÃ£o encontrada.",
+        )
+
+    return FileResponse(
+        path=caminho,
+        media_type="image/png",
+        filename=nome_arquivo,
+    )
+
+
+========== web\templates\index.html ==========
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101322">
+    <title>GeraArteIA | Criatividade com inteligência artificial</title>
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #101322;
+            --panel: #191d30;
+            --panel2: #20253b;
+            --border: #303650;
+            --text: #f4f5ff;
+            --muted: #a5acc5;
+            --blue: #6685ff;
+            --purple: #9b72f2;
+            --green: #7ee0b0;
+            --red: #ff9d9d;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background:
+                radial-gradient(ellipse at 15% 0%, #29234b 0, transparent 38%),
+                radial-gradient(ellipse at 100% 15%, #1b3151 0, transparent 32%),
+                var(--bg);
+            color: var(--text);
+        }
+
+        button, textarea { font: inherit; }
+
+        button { cursor: pointer; }
+
+        button:focus-visible, textarea:focus-visible {
+            outline: 2px solid #9aaeff;
+            outline-offset: 3px;
+        }
+
+        .container {
+            width: min(1120px, 100%);
+            margin: 0 auto;
+            padding: 34px 22px 24px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 34px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .brand-icon {
+            display: grid;
+            place-items: center;
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--blue), var(--purple));
+            font-size: 26px;
+            box-shadow: 0 8px 28px #7867ef40;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(25px, 4vw, 34px);
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .status-pill {
+            padding: 9px 13px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: #d9ddf5;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .intro { margin: 0 0 23px; }
+
+        .intro h2 {
+            margin: 0 0 8px;
+            font-size: clamp(23px, 4vw, 31px);
+            letter-spacing: -.6px;
+        }
+
+        .intro p {
+            max-width: 720px;
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .card {
+            min-width: 0;
+            padding: 24px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: linear-gradient(160deg, #1b2034f5, #171b2cf5);
+            box-shadow: 0 18px 55px #00000020;
+        }
+
+        .section-title {
+            margin: 0 0 7px;
+            font-size: 19px;
+        }
+
+        .section-help {
+            margin: 0 0 22px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: 650;
+        }
+
+        textarea {
+            display: block;
+            width: 100%;
+            min-height: 165px;
+            padding: 15px;
+            resize: vertical;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            background: #101423;
+            color: var(--text);
+            line-height: 1.65;
+        }
+
+        textarea::placeholder { color: #7e86a4; }
+
+        .counter {
+            margin-top: 8px;
+            color: var(--muted);
+            text-align: right;
+            font-size: 12px;
+        }
+
+        .examples-title {
+            margin: 22px 0 10px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .7px;
+        }
+
+        .examples {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .example {
+            padding: 9px 11px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #242941;
+            color: #e1e5ff;
+            font-size: 12px;
+            transition: border-color .2s, background .2s;
+        }
+
+        .example:hover {
+            border-color: var(--blue);
+            background: #2b3150;
+        }
+
+        .primary, .secondary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            min-height: 47px;
+            padding: 12px 17px;
+            border: 0;
+            border-radius: 12px;
+            font-weight: 700;
+            transition: filter .2s, transform .2s;
+        }
+
+        .primary {
+            width: 100%;
+            margin-top: 20px;
+            background: linear-gradient(100deg, var(--blue), var(--purple));
+            color: white;
+        }
+
+        .primary:hover, .secondary:hover {
+            filter: brightness(1.1);
+        }
+
+        .primary:disabled {
+            opacity: .65;
+            cursor: wait;
+        }
+
+        .secondary {
+            border: 1px solid var(--border);
+            background: #252b43;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .status {
+            display: none;
+            margin-top: 16px;
+            padding: 13px 14px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            background: #111526;
+            color: #d8def8;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+
+        .status.sucesso { color: var(--green); }
+        .status.erro { color: var(--red); }
+
+        .result-card { min-height: 435px; }
+
+        .result-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .result-heading h2 {
+            margin: 0;
+            font-size: 19px;
+        }
+
+        .result-badge {
+            padding: 6px 9px;
+            border-radius: 7px;
+            background: #292e49;
+            color: #b9c5ff;
+            font-size: 11px;
+        }
+
+        .empty-state {
+            display: flex;
+            min-height: 330px;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 26px;
+            border: 1px dashed #3b4260;
+            border-radius: 15px;
+            background: #12162680;
+            text-align: center;
+        }
+
+        .empty-icon {
+            display: grid;
+            place-items: center;
+            width: 74px;
+            height: 74px;
+            margin-bottom: 17px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #6685ff24, #9b72f224);
+            font-size: 34px;
+        }
+
+        .empty-state h3 {
+            margin: 0 0 9px;
+            font-size: 16px;
+        }
+
+        .empty-state p {
+            max-width: 290px;
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .image-area { display: none; }
+
+        .image-area img {
+            display: block;
+            width: 100%;
+            max-height: 620px;
+            object-fit: contain;
+            border-radius: 13px;
+            background: #101423;
+        }
+
+        .image-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+            margin-top: 13px;
+        }
+
+        .image-actions .secondary { flex: 1; }
+
+        .history-section { margin-top: 24px; }
+
+        .history-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 13px;
+        }
+
+        .history-heading h2 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .history-heading span {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .history {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .history-item {
+            min-width: 0;
+            padding: 5px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            background: #121626;
+            color: var(--text);
+            text-align: left;
+        }
+
+        .history-item img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 7px;
+        }
+
+        .history-item span {
+            display: block;
+            padding: 7px 3px 4px;
+            overflow: hidden;
+            color: var(--muted);
+            font-size: 10px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-empty {
+            grid-column: 1 / -1;
+            padding: 17px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            color: var(--muted);
+            font-size: 12px;
+            text-align: center;
+        }
+
+        footer {
+            padding: 30px 0 8px;
+            color: var(--muted);
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        footer strong { color: #e5e8fb; }
+
+        @media (max-width: 800px) {
+            .workspace { grid-template-columns: 1fr; }
+            .result-card { min-height: 0; }
+            .empty-state { min-height: 240px; }
+        }
+
+        @media (max-width: 520px) {
+            .container { padding: 23px 14px; }
+            .header { align-items: flex-start; }
+            .brand { gap: 10px; }
+            .brand-icon { width: 43px; height: 43px; border-radius: 13px; }
+            .status-pill { display: none; }
+            .card { padding: 17px; border-radius: 16px; }
+            textarea { min-height: 145px; }
+            .history { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .image-actions { flex-direction: column; }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="container">
+        <header class="header">
+            <div class="brand">
+                <div class="brand-icon" aria-hidden="true">🎨</div>
+                <div>
+                    <h1>GeraArteIA</h1>
+                    <p class="subtitle">Inteligência artificial para transformar ideias em imagens</p>
+                </div>
+            </div>
+            <div class="status-pill">✦ Projeto acadêmico</div>
+        </header>
+
+        <section class="intro">
+            <h2>Sua imaginação, em imagens.</h2>
+            <p>
+                Descreva uma cena, um personagem ou uma ideia. O GeraArteIA
+                utiliza um modelo de difusão para transformar sua descrição em uma imagem.
+            </p>
+        </section>
+
+        <div class="workspace">
+            <section class="card">
+                <h2 class="section-title">Criar imagem</h2>
+                <p class="section-help">
+                    Quanto mais clara e detalhada for a descrição, melhor será a orientação para o modelo.
+                </p>
+
+                <label for="prompt">O que você quer criar?</label>
+                <textarea
+                    id="prompt"
+                    maxlength="1500"
+                    placeholder="Exemplo: Um cavalo marrom de corpo inteiro correndo em um campo verde ao pôr do sol, fotografia realista..."
+                    aria-describedby="contador"
+                ></textarea>
+                <div id="contador" class="counter">0 / 1500 caracteres</div>
+
+                <div class="examples-title">Experimente um exemplo</div>
+                <div class="examples">
+                    <button type="button" class="example" data-prompt="Uma girafa de corpo inteiro na savana africana, árvores ao fundo, luz natural, fotografia de vida selvagem">🦒 Girafa na savana</button>
+                    <button type="button" class="example" data-prompt="Um SUV rosa com um laço rosa elegante no capô, carro inteiro visível, fotografia realista em estúdio">🚙 SUV rosa</button>
+                    <button type="button" class="example" data-prompt="Uma onça-pintada em estilo de tatuagem artística, linhas detalhadas, composição limpa em fundo branco">🐆 Tatuagem de onça</button>
+                    <button type="button" class="example" data-prompt="Um ciclista pedalando em uma bicicleta completa, as duas rodas visíveis, em uma ciclovia ao ar livre, fotografia realista">🚴 Ciclista</button>
+                    <button type="button" class="example" data-prompt="Um cavalo marrom de corpo inteiro galopando em um campo verde, quatro patas visíveis, luz dourada do pôr do sol, fotografia realista">🐎 Cavalo no campo</button>
+                </div>
+
+                <button type="button" id="btnGerar" class="primary">
+                    <span aria-hidden="true">✦</span> Gerar imagem
+                </button>
+
+                <div id="status" class="status" role="status" aria-live="polite"></div>
+            </section>
+
+            <section class="card result-card">
+                <div class="result-heading">
+                    <h2>Resultado</h2>
+                    <span class="result-badge">Stable Diffusion 1.5</span>
+                </div>
+
+                <div id="estadoVazio" class="empty-state">
+                    <div class="empty-icon" aria-hidden="true">✧</div>
+                    <h3>Sua próxima criação começa aqui</h3>
+                    <p>Escreva uma descrição ou escolha um exemplo. A imagem gerada aparecerá neste espaço.</p>
+                </div>
+
+                <div id="areaImagem" class="image-area">
+                    <img id="imagemGerada" alt="Imagem criada pelo GeraArteIA">
+                    <div class="image-actions">
+                        <button type="button" id="btnBaixar" class="secondary">↓ Baixar imagem</button>
+                        <button type="button" id="btnLimpar" class="secondary">Limpar resultado</button>
+                    </div>
+                </div>
+
+                <section class="history-section">
+                    <div class="history-heading">
+                        <h2>Imagens desta sessão</h2>
+                        <span id="totalHistorico">0 imagens</span>
+                    </div>
+                    <div id="historico" class="history">
+                        <div class="history-empty">As imagens geradas nesta sessão aparecerão aqui.</div>
+                    </div>
+                </section>
+            </section>
+        </div>
+
+        <footer>
+            <strong>GeraArteIA</strong><br>
+            Projeto acadêmico de geração de imagens por difusão.<br>
+            Desenvolvido por Walter Muniz Santos e Luan Jesus Pereira Gomes.
+        </footer>
+    </main>
+
+    <script>
+        const campoPrompt = document.getElementById("prompt");
+        const botaoGerar = document.getElementById("btnGerar");
+        const statusEl = document.getElementById("status");
+        const imagemEl = document.getElementById("imagemGerada");
+        const areaImagem = document.getElementById("areaImagem");
+        const estadoVazio = document.getElementById("estadoVazio");
+        const historicoEl = document.getElementById("historico");
+        const totalHistoricoEl = document.getElementById("totalHistorico");
+
+        let imagensDaSessao = [];
+        let imagemAtual = null;
+
+        campoPrompt.addEventListener("input", () => {
+            document.getElementById("contador").textContent =
+                `${campoPrompt.value.length} / 1500 caracteres`;
+        });
+
+        document.querySelectorAll(".example").forEach((botao) => {
+            botao.addEventListener("click", () => {
+                campoPrompt.value = botao.dataset.prompt || "";
+                campoPrompt.dispatchEvent(new Event("input"));
+                campoPrompt.focus();
+            });
+        });
+
+        function mostrarStatus(mensagem, tipo = "") {
+            statusEl.style.display = "block";
+            statusEl.className = "status" + (tipo ? " " + tipo : "");
+            statusEl.textContent = mensagem;
+        }
+
+        function mostrarImagem(url, prompt) {
+            imagemAtual = { url, prompt };
+            imagemEl.src = url;
+            areaImagem.style.display = "block";
+            estadoVazio.style.display = "none";
+        }
+
+        function atualizarHistorico() {
+            historicoEl.replaceChildren();
+            totalHistoricoEl.textContent =
+                `${imagensDaSessao.length} ${imagensDaSessao.length === 1 ? "imagem" : "imagens"}`;
+
+            if (imagensDaSessao.length === 0) {
+                const vazio = document.createElement("div");
+                vazio.className = "history-empty";
+                vazio.textContent = "As imagens geradas nesta sessão aparecerão aqui.";
+                historicoEl.appendChild(vazio);
+                return;
+            }
+
+            imagensDaSessao.forEach((item, indice) => {
+                const botao = document.createElement("button");
+                botao.type = "button";
+                botao.className = "history-item";
+                botao.title = item.prompt;
+
+                const miniatura = document.createElement("img");
+                miniatura.src = item.url;
+                miniatura.alt = `Imagem ${indice + 1} do histórico`;
+                miniatura.loading = "lazy";
+
+                const legenda = document.createElement("span");
+                legenda.textContent = item.prompt || `Imagem ${indice + 1}`;
+
+                botao.append(miniatura, legenda);
+                botao.addEventListener("click", () => {
+                    mostrarImagem(item.url, item.prompt);
+                    mostrarStatus("Imagem selecionada no histórico.", "sucesso");
+                });
+                historicoEl.appendChild(botao);
+            });
+        }
+
+        async function gerarImagem() {
+            const prompt = campoPrompt.value.trim();
+
+            if (!prompt) {
+                mostrarStatus("Digite uma descrição ou escolha um dos exemplos antes de gerar a imagem.", "erro");
+                campoPrompt.focus();
+                return;
+            }
+
+            botaoGerar.disabled = true;
+            botaoGerar.textContent = "⏳ Gerando imagem...";
+            mostrarStatus("Preparando o modelo e gerando sua imagem. Esse processo pode levar alguns minutos.");
+            areaImagem.style.display = "none";
+
+            try {
+                const resposta = await fetch("/api/gerar", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({ prompt })
+                });
+
+                const tipo = resposta.headers.get("content-type") || "";
+                const corpo = await resposta.text();
+                let dados;
+
+                if (tipo.includes("application/json")) {
+                    try {
+                        dados = JSON.parse(corpo);
+                    } catch {
+                        throw new Error("O servidor retornou uma resposta JSON inválida.");
+                    }
+                } else {
+                    console.error("Resposta inesperada do servidor:", corpo);
+                    throw new Error(
+                        "O servidor não retornou JSON. Verifique se a aplicação FastAPI está funcionando."
+                    );
+                }
+
+                if (!resposta.ok) {
+                    throw new Error(dados.detail || dados.message || "Não foi possível gerar a imagem.");
+                }
+
+                if (!dados.imagem) {
+                    throw new Error("A API não informou o endereço da imagem gerada.");
+                }
+
+                const urlImagem = dados.imagem + (dados.imagem.includes("?") ? "&" : "?") + "t=" + Date.now();
+                mostrarImagem(urlImagem, prompt);
+
+                imagensDaSessao.unshift({
+                    url: urlImagem,
+                    prompt,
+                    arquivo: dados.arquivo || ""
+                });
+                atualizarHistorico();
+
+                mostrarStatus("Imagem gerada com sucesso!", "sucesso");
+            } catch (erro) {
+                console.error("Erro no GeraArteIA:", erro);
+                mostrarStatus("Erro: " + erro.message, "erro");
+            } finally {
+                botaoGerar.disabled = false;
+                botaoGerar.innerHTML = "<span aria-hidden=\"true\">✦</span> Gerar imagem";
+            }
+        }
+
+        botaoGerar.addEventListener("click", gerarImagem);
+
+        document.getElementById("btnBaixar").addEventListener("click", () => {
+            if (!imagemAtual) {
+                mostrarStatus("Gere uma imagem antes de tentar baixar.", "erro");
+                return;
+            }
+
+            const link = document.createElement("a");
+            link.href = imagemAtual.url.split("?")[0];
+            link.download = imagemAtual.arquivo || "geraarteia.png";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        });
+
+        document.getElementById("btnLimpar").addEventListener("click", () => {
+            imagemAtual = null;
+            imagemEl.removeAttribute("src");
+            areaImagem.style.display = "none";
+            estadoVazio.style.display = "flex";
+            campoPrompt.value = "";
+            campoPrompt.dispatchEvent(new Event("input"));
+            statusEl.style.display = "none";
+        });
+
+        campoPrompt.addEventListener("keydown", (evento) => {
+            if ((evento.ctrlKey || evento.metaKey) && evento.key === "Enter") {
+                gerarImagem();
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+========== tests\test_generator.py ==========
+from app.prompt_optimizer import PromptOptimizer
+
+
+def test_detectar_animal():
+    optimizer = PromptOptimizer()
+
+    categoria = optimizer.detectar_categoria(
+        "Um cavalo correndo em um campo"
+    )
+
+    assert "animal" in categoria
+
+
+def test_otimizar_animal():
+    optimizer = PromptOptimizer()
+
+    prompt = optimizer.otimizar(
+        "Um cavalo marrom correndo"
+    )
+
+    assert "full body animal" in prompt
+    assert "complete head and face" in prompt
+
+
+
+========== requirements.txt ==========
+fastapi
+uvicorn[standard]
+jinja2
+pydantic
+
+torch
+torchvision
+
+diffusers==0.39.0
+transformers==5.14.1
+accelerate==1.14.0
+safetensors==0.8.0
+
+Pillow
+numpy
+
+
+========== README.md ==========
+# ðŸŽ¨ GeraArteIA â€” GeraÃ§Ã£o de Imagens por DifusÃ£o
+
+![Status](https://img.shields.io/badge/status-funcionando-success)
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Stable Diffusion](https://img.shields.io/badge/Stable%20Diffusion-v1.5-purple)
+![GPU](https://img.shields.io/badge/GPU-NVIDIA%20Tesla%20T4-green)
+![Modal](https://img.shields.io/badge/Hospedagem-Modal-orange)
+
+## ðŸŒ Acesse o GeraArteIA
+
+### ðŸš€ GERADOR DE IMAGENS ONLINE
+
+**[ðŸ‘‰ CLIQUE AQUI PARA ACESSAR O GERADOR](https://walmunsan-cloud--geraarteia-web.modal.run)**
+
+> O sistema estÃ¡ hospedado no Modal e pode ser acessado diretamente pelo navegador, sem necessidade de instalar Python, abrir Google Colab ou executar programas localmente.
+
+---
+
+# ðŸŽ“ Sobre o projeto
+
+O **GeraArteIA** Ã© uma aplicaÃ§Ã£o de InteligÃªncia Artificial Generativa desenvolvida como projeto de **Trabalho de ConclusÃ£o de Curso (TCC)**, com foco na **GeraÃ§Ã£o de Imagens por DifusÃ£o**.
+
+O sistema permite que o usuÃ¡rio forneÃ§a uma descriÃ§Ã£o textual (*prompt*) e, a partir dessa descriÃ§Ã£o, utilize o modelo **Stable Diffusion v1.5** para gerar uma imagem correspondente.
+
+O projeto demonstra, de forma prÃ¡tica, a integraÃ§Ã£o entre:
+
+* InteligÃªncia Artificial Generativa;
+* Modelos de DifusÃ£o;
+* Processamento de linguagem;
+* Redes neurais;
+* Python;
+* PyTorch;
+* CUDA;
+* GPU;
+* API web;
+* Interface web;
+* ComputaÃ§Ã£o em nuvem.
+
+---
+
+# ðŸ‘¨â€ðŸŽ“ Autores
+
+**Walter Muniz Santos**
+
+**Luan Jesus**
+
+Projeto desenvolvido para fins acadÃªmicos.
+
+---
+
+# ðŸŽ¯ Objetivo geral
+
+Desenvolver uma aplicaÃ§Ã£o web capaz de gerar imagens a partir de descriÃ§Ãµes textuais utilizando tÃ©cnicas de **InteligÃªncia Artificial Generativa e modelos de DifusÃ£o**.
+
+---
+
+# ðŸŽ¯ Objetivos especÃ­ficos
+
+* Estudar o funcionamento dos modelos de geraÃ§Ã£o de imagens por difusÃ£o;
+* Utilizar o modelo Stable Diffusion v1.5;
+* Desenvolver uma aplicaÃ§Ã£o web para geraÃ§Ã£o de imagens;
+* Permitir a entrada de prompts pelo usuÃ¡rio;
+* Processar os prompts antes da geraÃ§Ã£o;
+* Utilizar GPU para aceleraÃ§Ã£o do processamento;
+* Integrar Python, PyTorch e Diffusers;
+* Disponibilizar o sistema pela internet;
+* Avaliar os resultados obtidos durante os testes;
+* Documentar todo o processo de desenvolvimento.
+
+---
+
+# ðŸ§  O que sÃ£o modelos de DifusÃ£o?
+
+Os modelos de difusÃ£o sÃ£o modelos de InteligÃªncia Artificial capazes de gerar imagens a partir de informaÃ§Ãµes fornecidas pelo usuÃ¡rio.
+
+De maneira simplificada, o processo parte de uma representaÃ§Ã£o baseada em ruÃ­do e realiza sucessivas etapas de transformaÃ§Ã£o atÃ© produzir uma imagem coerente com a descriÃ§Ã£o fornecida.
+
+No GeraArteIA, o usuÃ¡rio informa um texto e o modelo **Stable Diffusion v1.5** interpreta essa descriÃ§Ã£o para produzir a imagem.
+
+Fluxo simplificado:
+
+```text
+DescriÃ§Ã£o textual
+       â†“
+     Prompt
+       â†“
+Processamento
+       â†“
+Stable Diffusion v1.5
+       â†“
+PyTorch / CUDA
+       â†“
+GPU NVIDIA Tesla T4
+       â†“
+Imagem gerada
+```
+
+---
+
+# ðŸ—ï¸ Arquitetura final
+
+A versÃ£o final do projeto utiliza uma arquitetura web baseada em **FastAPI**, sem depender do Gradio para a interface.
+
+```text
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚          USUÃRIO         â”‚
+â”‚                          â”‚
+â”‚      Digita o Prompt     â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚
+             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚      INTERFACE WEB       â”‚
+â”‚      HTML / CSS / JS     â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚
+             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚         FASTAPI          â”‚
+â”‚          API             â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚
+             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚       PYTHON             â”‚
+â”‚                          â”‚
+â”‚ Processamento do Prompt  â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚
+             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚   DIFFUSERS              â”‚
+â”‚                          â”‚
+â”‚ Stable Diffusion v1.5    â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚
+             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚        PYTORCH           â”‚
+â”‚          CUDA            â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚
+             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚     NVIDIA TESLA T4      â”‚
+â”‚                          â”‚
+â”‚ Processamento da IA      â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚
+             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚      IMAGEM PNG          â”‚
+â”‚        512 Ã— 512         â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+```
+
+---
+
+# ðŸ› ï¸ Tecnologias utilizadas
+
+| Tecnologia                | UtilizaÃ§Ã£o                                  |
+| ------------------------- | ------------------------------------------- |
+| **Python 3.11**           | Linguagem principal                         |
+| **PyTorch 2.5.1**         | ComputaÃ§Ã£o e execuÃ§Ã£o do modelo             |
+| **Torchvision 0.20.1**    | Processamento relacionado a imagens         |
+| **Diffusers 0.31.0**      | ImplementaÃ§Ã£o do modelo de difusÃ£o          |
+| **Transformers 4.46.3**   | Componentes de processamento de linguagem   |
+| **Accelerate 1.1.1**      | AceleraÃ§Ã£o e gerenciamento do processamento |
+| **Safetensors 0.4.5**     | Armazenamento seguro dos pesos do modelo    |
+| **FastAPI**               | API e servidor web                          |
+| **HTML**                  | Estrutura da interface                      |
+| **CSS**                   | EstilizaÃ§Ã£o da interface                    |
+| **JavaScript**            | InteraÃ§Ã£o com a aplicaÃ§Ã£o                   |
+| **Stable Diffusion v1.5** | GeraÃ§Ã£o das imagens                         |
+| **CUDA**                  | AceleraÃ§Ã£o utilizando GPU                   |
+| **NVIDIA Tesla T4**       | Processamento da IA                         |
+| **Modal**                 | Hospedagem e execuÃ§Ã£o em nuvem              |
+| **Git / GitHub**          | Controle de versÃ£o e documentaÃ§Ã£o           |
+
+---
+
+# âš™ï¸ ConfiguraÃ§Ã£o final da geraÃ§Ã£o
+
+A configuraÃ§Ã£o utilizada na versÃ£o final foi:
+
+| ParÃ¢metro      | Valor                 |
+| -------------- | --------------------- |
+| Modelo         | Stable Diffusion v1.5 |
+| ResoluÃ§Ã£o      | 512 Ã— 512 pixels      |
+| Steps          | 24                    |
+| Guidance Scale | 7.0                   |
+| Seed padrÃ£o    | 42                    |
+| PrecisÃ£o       | Float16               |
+| Formato        | PNG                   |
+| GPU            | NVIDIA Tesla T4       |
+| Framework      | PyTorch               |
+| AceleraÃ§Ã£o     | CUDA                  |
+
+---
+
+# ðŸ§© OtimizaÃ§Ã£o da geraÃ§Ã£o
+
+Durante o desenvolvimento foram utilizadas tÃ©cnicas de otimizaÃ§Ã£o para melhorar o desempenho e o consumo de memÃ³ria.
+
+Entre os recursos utilizados estÃ£o:
+
+* Attention Slicing;
+* VAE Slicing;
+* VAE Tiling;
+* otimizaÃ§Ãµes do PyTorch;
+* execuÃ§Ã£o em precisÃ£o Float16;
+* utilizaÃ§Ã£o de GPU CUDA.
+
+Essas tÃ©cnicas foram importantes principalmente durante os testes em ambientes com recursos computacionais limitados.
+
+---
+
+# âœï¸ Processamento dos prompts
+
+O sistema trabalha com uma descriÃ§Ã£o textual fornecida pelo usuÃ¡rio.
+
+O prompt pode ser processado antes de ser enviado ao modelo, permitindo adicionar informaÃ§Ãµes relacionadas Ã  composiÃ§Ã£o da imagem.
+
+Durante os testes foram observados problemas como:
+
+* objetos parcialmente cortados;
+* animais incompletos;
+* problemas de enquadramento;
+* anatomia inadequada;
+* partes do corpo fora da imagem.
+
+Para reduzir esses problemas, foram utilizadas orientaÃ§Ãµes adicionais relacionadas Ã  composiÃ§Ã£o, enquadramento e visualizaÃ§Ã£o completa do objeto.
+
+Exemplo:
+
+```text
+full body animal
+entire animal fully visible
+head clearly visible
+complete head and face
+correct animal anatomy
+natural body proportions
+centered composition
+wide shot
+clear space around the subject
+no cropping
+subject completely inside the frame
+```
+
+---
+
+# ðŸ”„ EvoluÃ§Ã£o do projeto
+
+O GeraArteIA passou por diferentes etapas durante seu desenvolvimento.
+
+## 1. ExecuÃ§Ã£o local
+
+A primeira etapa foi realizada em computador local utilizando Python e uma GPU NVIDIA GTX 960.
+
+Nessa etapa foram identificadas limitaÃ§Ãµes de memÃ³ria da GPU, principalmente para geraÃ§Ã£o de imagens em resoluÃ§Ãµes maiores.
+
+---
+
+## 2. Google Colab
+
+Posteriormente, o projeto foi executado no Google Colab utilizando GPU NVIDIA Tesla T4.
+
+A utilizaÃ§Ã£o da T4 permitiu aumentar a resoluÃ§Ã£o e melhorar significativamente a qualidade das imagens.
+
+---
+
+## 3. Kaggle
+
+TambÃ©m foram realizados testes utilizando ambientes com GPU NVIDIA Tesla T4 disponibilizados pelo Kaggle.
+
+Essa etapa permitiu avaliar diferentes ambientes de execuÃ§Ã£o em nuvem.
+
+---
+
+## 4. Cloudflare Tunnel
+
+Durante uma das etapas de demonstraÃ§Ã£o, foi utilizado o Cloudflare Tunnel para disponibilizar temporariamente a aplicaÃ§Ã£o local/Colab pela internet.
+
+Essa soluÃ§Ã£o funcionou para testes, porÃ©m dependia da sessÃ£o de execuÃ§Ã£o permanecer ativa.
+
+---
+
+## 5. Gradio
+
+O Gradio tambÃ©m foi utilizado durante o desenvolvimento para criar uma interface de demonstraÃ§Ã£o.
+
+ApÃ³s os testes, optou-se por retirar o Gradio da versÃ£o final devido a problemas de compatibilidade encontrados no ambiente de hospedagem.
+
+---
+
+## 6. Modal â€” versÃ£o final
+
+Na etapa final, o projeto foi migrado para o **Modal**, utilizando uma GPU NVIDIA Tesla T4.
+
+A aplicaÃ§Ã£o final utiliza:
+
+```text
+Modal
+   â†“
+FastAPI
+   â†“
+Python
+   â†“
+Diffusers
+   â†“
+Stable Diffusion v1.5
+   â†“
+PyTorch
+   â†“
+CUDA
+   â†“
+NVIDIA Tesla T4
+```
+
+Essa arquitetura permitiu disponibilizar o sistema por meio de um endereÃ§o pÃºblico acessÃ­vel pelo navegador.
+
+---
+
+# â˜ï¸ Hospedagem final
+
+A versÃ£o final do GeraArteIA estÃ¡ hospedada no **Modal**.
+
+O usuÃ¡rio nÃ£o precisa instalar o projeto ou abrir o Google Colab para utilizar a demonstraÃ§Ã£o.
+
+### Link da aplicaÃ§Ã£o:
+
+**https://walmunsan-cloud--geraarteia-web.modal.run**
+
+### RepositÃ³rio:
+
+**https://github.com/walmunsan-cloud/GeraArteIA**
+
+---
+
+# ðŸ–¥ï¸ Como utilizar
+
+Para utilizar o GeraArteIA:
+
+### 1. Acesse:
+
+https://walmunsan-cloud--geraarteia-web.modal.run
+
+### 2. Digite uma descriÃ§Ã£o
+
+Exemplo:
+
+```text
+Um cavalo marrom correndo em um campo verde durante o pÃ´r do sol
+```
+
+### 3. Informe a seed
+
+A seed padrÃ£o Ã©:
+
+```text
+42
+```
+
+TambÃ©m Ã© possÃ­vel utilizar outra seed para produzir uma variaÃ§Ã£o da geraÃ§Ã£o.
+
+### 4. Clique em gerar
+
+O sistema enviarÃ¡ o prompt para a API.
+
+### 5. Aguarde o processamento
+
+O modelo Stable Diffusion realizarÃ¡ a geraÃ§Ã£o utilizando a GPU NVIDIA Tesla T4.
+
+### 6. Visualize a imagem
+
+A imagem serÃ¡ apresentada diretamente na pÃ¡gina.
+
+---
+
+# ðŸ”Œ API
+
+A aplicaÃ§Ã£o final disponibiliza endpoints HTTP.
+
+## PÃ¡gina principal
+
+```text
+GET /
+```
+
+Retorna a interface web do GeraArteIA.
+
+---
+
+## VerificaÃ§Ã£o de funcionamento
+
+```text
+GET /health
+```
+
+Utilizado para verificar o estado da aplicaÃ§Ã£o.
+
+Exemplo de resposta:
+
+```json
+{
+  "status": "online",
+  "app": "GeraArteIA"
+}
+```
+
+---
+
+## GeraÃ§Ã£o de imagem
+
+```text
+POST /generate
+```
+
+Recebe o prompt e os parÃ¢metros da geraÃ§Ã£o.
+
+Exemplo conceitual:
+
+```json
+{
+  "prompt": "Um cavalo marrom correndo em um campo verde",
+  "seed": 42
+}
+```
+
+A API retorna a imagem gerada em formato PNG codificado para apresentaÃ§Ã£o na interface web.
+
+---
+
+# ðŸ§ª Testes realizados
+
+Durante o desenvolvimento foram realizados testes de:
+
+* carregamento do modelo;
+* funcionamento da API;
+* processamento dos prompts;
+* utilizaÃ§Ã£o da GPU;
+* geraÃ§Ã£o de imagens;
+* alteraÃ§Ã£o de seeds;
+* resoluÃ§Ã£o 512 Ã— 512;
+* diferentes quantidades de steps;
+* diferentes descriÃ§Ãµes;
+* geraÃ§Ã£o de animais;
+* geraÃ§Ã£o de veÃ­culos;
+* geraÃ§Ã£o de paisagens;
+* funcionamento da interface web;
+* acesso pÃºblico pela internet.
+
+Os testes confirmaram o funcionamento da versÃ£o final.
+
+---
+
+# ðŸ“Š Resultado final
+
+A versÃ£o final do GeraArteIA conseguiu realizar o fluxo completo de geraÃ§Ã£o:
+
+```text
+UsuÃ¡rio
+   â†“
+Prompt
+   â†“
+Interface Web
+   â†“
+FastAPI
+   â†“
+Processamento do Prompt
+   â†“
+Stable Diffusion v1.5
+   â†“
+PyTorch
+   â†“
+CUDA
+   â†“
+NVIDIA Tesla T4
+   â†“
+Imagem 512 Ã— 512
+   â†“
+UsuÃ¡rio
+```
+
+O projeto demonstrou a viabilidade de integrar um modelo de InteligÃªncia Artificial Generativa a uma aplicaÃ§Ã£o web acessÃ­vel diretamente pelo navegador.
+
+---
+
+# ðŸŽ“ ConclusÃ£o
+
+O desenvolvimento do GeraArteIA possibilitou analisar, na prÃ¡tica, o funcionamento de modelos de **GeraÃ§Ã£o de Imagens por DifusÃ£o**.
+
+Durante o projeto foram avaliadas diferentes arquiteturas e ambientes de execuÃ§Ã£o, desde a utilizaÃ§Ã£o de hardware local atÃ© ambientes de computaÃ§Ã£o em nuvem.
+
+A utilizaÃ§Ã£o da GPU NVIDIA Tesla T4 proporcionou recursos computacionais adequados para a execuÃ§Ã£o do Stable Diffusion v1.5 em resoluÃ§Ã£o de 512 Ã— 512 pixels.
+
+A versÃ£o final, hospedada no Modal, apresenta uma arquitetura composta por **FastAPI, Python, Diffusers, PyTorch, CUDA e Stable Diffusion**, disponibilizando uma interface web para interaÃ§Ã£o com o usuÃ¡rio.
+
+O projeto tambÃ©m demonstrou a importÃ¢ncia da escolha da infraestrutura de computaÃ§Ã£o para aplicaÃ§Ãµes de InteligÃªncia Artificial Generativa, especialmente em modelos que demandam elevada capacidade de processamento grÃ¡fico.
+
+---
+
+# ðŸ“š Finalidade acadÃªmica
+
+Este projeto foi desenvolvido como parte do **Trabalho de ConclusÃ£o de Curso (TCC)** da pÃ³s-graduaÃ§Ã£o em:
+
+**Engenharia de Software: AutomaÃ§Ã£o, InovaÃ§Ã£o e InteligÃªncia Artificial**
+
+### Tema
+
+**GeraÃ§Ã£o de Imagens por DifusÃ£o**
+
+### Projeto
+
+**GeraArteIA**
+
+### Autores
+
+**Walter Muniz Santos e Luan Jesus**
+
+---
+
+# ðŸ“ Estrutura principal
+
+```text
+GeraArteIA/
+â”‚
+â”œâ”€â”€ app/
+â”œâ”€â”€ src/
+â”œâ”€â”€ tests/
+â”œâ”€â”€ web/
+â”œâ”€â”€ huggingface_space/
+â”œâ”€â”€ modal_app.py
+â”œâ”€â”€ requirements.txt
+â”œâ”€â”€ README.md
+â””â”€â”€ TCC_GERAARTEIA.md
+```
+
+A implementaÃ§Ã£o final de hospedagem utiliza o arquivo:
+
+```text
+modal_app.py
+```
+
+---
+
+# âš ï¸ ObservaÃ§Ã£o sobre custos
+
+A execuÃ§Ã£o de modelos de InteligÃªncia Artificial utilizando GPU em nuvem pode gerar consumo de recursos computacionais.
+
+O projeto foi configurado para fins acadÃªmicos e de demonstraÃ§Ã£o.
+
+O tempo de execuÃ§Ã£o da GPU deve ser considerado durante a utilizaÃ§Ã£o da aplicaÃ§Ã£o.
+
+---
+
+# ðŸ”— Links
+
+### ðŸŒ AplicaÃ§Ã£o online
+
+**https://walmunsan-cloud--geraarteia-web.modal.run**
+
+### ðŸ’» GitHub
+
+**https://github.com/walmunsan-cloud/GeraArteIA**
+
+---
+
+# ðŸ‘¨â€ðŸ’» Desenvolvedores
+
+**Walter Muniz Santos**
+
+**Luan Jesus Pereira Gomes**
+
+ðŸŽ¨ **GeraArteIA â€” GeraÃ§Ã£o de Imagens por DifusÃ£o**
+

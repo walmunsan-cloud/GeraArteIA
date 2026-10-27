@@ -21,14 +21,19 @@ MODEL_PATH = "stable-diffusion-v1-5/stable-diffusion-v1-5"
 IMAGE_WIDTH = 512
 IMAGE_HEIGHT = 512
 
-NUM_INFERENCE_STEPS = 24
+NUM_INFERENCE_STEPS = 28
 GUIDANCE_SCALE = 7.0
 SEED = 42
 
 NEGATIVE_PROMPT = (
-    "blurry, low quality, low resolution, distorted, deformed, "
-    "bad anatomy, bad proportions, duplicate, duplicated objects, "
-    "extra limbs, extra fingers, missing fingers, malformed hands, "
-    "missing head, missing body parts, cropped, cut off, close-up, zoomed in, "
-    "text, watermark, logo, oversaturated, noisy, ugly"
+    "blurry, low quality, distorted, deformed, bad anatomy, "
+    "bad proportions, extra limbs, extra fingers, malformed hands, "
+    "missing limbs, missing legs, extra legs, fused legs, "
+    "cropped, cut off, close-up, zoomed in, text, watermark, logo"
+)
+
+HORSE_NEGATIVE_PROMPT = (
+    "deformed horse legs, duplicated horse legs, broken joints, "
+    "unnatural equine anatomy, overlapping legs, floating hooves, "
+    "fused legs, extra legs, malformed hooves, extra hooves"
 )

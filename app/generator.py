@@ -13,6 +13,7 @@ from .config import (
     GUIDANCE_SCALE,
     SEED,
     NEGATIVE_PROMPT,
+    HORSE_NEGATIVE_PROMPT,
 )
 
 from .prompt_optimizer import PromptOptimizer
@@ -55,7 +56,8 @@ class GeraArteIA:
     def gerar(
         self,
         prompt: str,
-        nome_arquivo: str = "imagem_gerada.png"
+        nome_arquivo: str = "imagem_gerada.png",
+        callback_progresso=None,
     ):
 
         if self.pipe is None:
@@ -103,14 +105,31 @@ class GeraArteIA:
             device="cpu"
         ).manual_seed(SEED)
 
+        def acompanhar_etapa(pipe, etapa, timestep, callback_kwargs):
+            if callback_progresso is not None:
+                percentual = int((etapa + 1) / NUM_INFERENCE_STEPS * 100)
+                callback_progresso(
+                    percentual,
+                    etapa + 1,
+                    NUM_INFERENCE_STEPS,
+                )
+            return callback_kwargs
+
+        texto_normalizado = self.prompt_optimizer._normalizar(prompt_original)
+        palavras_cavalo = ("cavalo", "cavalos", "egua", "eguas", "potro", "potros")
+        negativo_final = NEGATIVE_PROMPT
+        if any(palavra in texto_normalizado for palavra in palavras_cavalo):
+            negativo_final = f"{NEGATIVE_PROMPT}, {HORSE_NEGATIVE_PROMPT}"
+
         resultado = self.pipe(
             prompt=prompt_final,
-            negative_prompt=NEGATIVE_PROMPT,
+            negative_prompt=negativo_final,
             width=IMAGE_WIDTH,
             height=IMAGE_HEIGHT,
             num_inference_steps=NUM_INFERENCE_STEPS,
             guidance_scale=GUIDANCE_SCALE,
             generator=generator,
+            callback_on_step_end=acompanhar_etapa,
         )
 
         imagem = resultado.images[0]

@@ -1,203 +1,150 @@
-import re
-
+﻿import re
+import unicodedata
 
 class PromptOptimizer:
-
     def __init__(self):
-
         self.animal_keywords = [
-            "cavalo", "cavalos",
-            "cachorro", "cão", "cães",
-            "gato", "gatos",
-            "leão", "leões",
-            "tigre", "tigres",
-            "onça", "onças",
-            "elefante", "elefantes",
-            "girafa", "girafas",
-            "zebra", "zebras",
-            "boi", "bois",
-            "vaca", "vacas",
-            "touro", "touros",
-            "urso", "ursos",
-            "lobo", "lobos",
-            "macaco", "macacos",
-            "pássaro", "pássaros",
-            "animal", "animais",
+            "cavalo", "cavalos", "egua", "eguas", "potro", "potros",
+            "cachorro", "cao", "caes", "gato", "gatos", "leao", "leoes",
+            "onca", "oncas", "jaguar", "jaguares", "elefante", "girafa",
+            "girafas", "zebra", "boi", "vaca", "touro", "urso", "lobo",
+            "passaro", "animal", "animais",
         ]
-
         self.person_keywords = [
-            "homem", "mulher",
-            "menino", "menina",
-            "criança", "pessoa",
-            "pessoas", "jovem",
-            "idoso", "idosa",
-            "rapaz", "moça",
+            "homem", "mulher", "menino", "menina", "crianca", "pessoa",
+            "pessoas", "jovem", "idoso", "idosa", "rapaz", "moca", "ciclista",
         ]
-
         self.vehicle_keywords = [
-            "carro", "carros",
-            "automóvel", "veículo",
-            "moto", "motocicleta",
-            "caminhão", "ônibus",
-            "bicicleta", "bicicletas",
-            "avião", "aviões",
-            "helicóptero",
-            "barco", "navio",
+            "carro", "automovel", "veiculo", "suv", "moto", "motocicleta",
+            "caminhao", "onibus", "bicicleta", "bicicletas", "bike",
         ]
-
         self.landscape_keywords = [
-            "paisagem",
-            "praia",
-            "montanha",
-            "floresta",
-            "campo",
-            "cidade",
-            "deserto",
-            "lago",
-            "rio",
-            "cachoeira",
+            "paisagem", "praia", "montanha", "floresta", "campo", "cidade",
+            "deserto", "lago", "rio", "cachoeira", "savana", "pastagem",
+            "pasto", "ciclovia",
+        ]
+        self.object_keywords = [
+            "mesa", "cadeira", "computador", "celular", "telefone",
+            "relogio", "copo", "garrafa", "livro", "camera", "laco",
+            "lacinho", "gravata", "brinco",
         ]
 
-        self.object_keywords = [
-            "mesa", "cadeira",
-            "computador", "celular",
-            "telefone", "relógio",
-            "copo", "garrafa",
-            "livro", "câmera",
-        ]
+    @staticmethod
+    def _normalizar(texto: str) -> str:
+        texto = unicodedata.normalize("NFKD", texto.lower())
+        texto = "".join(c for c in texto if not unicodedata.combining(c))
+        return re.sub(r"\s+", " ", texto).strip()
 
     def detectar_categoria(self, texto: str) -> str:
-
-        texto = texto.lower()
-
-        categorias = []
-
-        if any(p in texto for p in self.animal_keywords):
-            categorias.append("animal")
-
-        if any(p in texto for p in self.person_keywords):
-            categorias.append("pessoa")
-
-        if any(p in texto for p in self.vehicle_keywords):
-            categorias.append("veiculo")
-
-        if any(p in texto for p in self.landscape_keywords):
-            categorias.append("paisagem")
-
-        if any(p in texto for p in self.object_keywords):
-            categorias.append("objeto")
-
-        if not categorias:
-            return "geral"
-
-        return "+".join(categorias)
+        normalizado = self._normalizar(texto)
+        grupos = [
+            ("animal", self.animal_keywords),
+            ("pessoa", self.person_keywords),
+            ("veiculo", self.vehicle_keywords),
+            ("paisagem", self.landscape_keywords),
+            ("objeto", self.object_keywords),
+        ]
+        categorias = [
+            categoria for categoria, palavras in grupos
+            if any(self._normalizar(p) in normalizado for p in palavras)
+        ]
+        if any(x in normalizado for x in ("tatuagem", "tattoo")):
+            categorias.append("tatuagem")
+        return "+".join(dict.fromkeys(categorias)) if categorias else "geral"
 
     def otimizar(self, prompt: str) -> str:
-
         prompt = re.sub(r"\s+", " ", prompt.strip())
+        if not prompt:
+            return ""
 
-        texto = prompt.lower()
-
+        texto = self._normalizar(prompt).replace("-", " ")
         categoria = self.detectar_categoria(prompt)
+        extras = []
 
-        partes = [
-            prompt,
-            "high quality",
-            "realistic",
-            "natural proportions",
-        ]
+        cavalo = any(x in texto for x in (
+            "cavalo", "cavalos", "egua", "eguas", "potro", "potros"
+        ))
+        girafa = "girafa" in texto
+        onca = any(x in texto for x in ("onca", "onça", "jaguar"))
+        tatuagem = any(x in texto for x in ("tatuagem", "tattoo"))
+        bicicleta = any(x in texto for x in (
+            "bicicleta", "bicicletas", "bike", "ciclista", "biciclista"
+        ))
 
-        if "animal" in categoria:
-
-            partes.extend([
-                "full body animal",
-                "entire animal fully visible",
-                "head clearly visible",
-                "complete head and face",
-                "four legs clearly visible when applicable",
-                "correct animal anatomy",
+        if cavalo:
+            extras.extend([
+                "photorealistic horse",
+                "anatomically plausible horse with four legs",
+                "four anatomically correct separate legs",
+                "realistic joints and hooves",
+                "full body animal, complete head and face, full body visible, head to hooves",
+                "natural horse proportions",
+            ])
+            if any(x in texto for x in ("correndo", "galopando", "galope", "corrida")):
+                extras.append("realistic galloping horse, clear leg separation")
+            elif any(x in texto for x in ("parado", "pastando", "em pe")):
+                extras.append("horse standing naturally on four legs")
+        elif girafa:
+            extras.extend([
+                "realistic giraffe",
+                "long natural giraffe neck",
+                "four visible legs",
+                "entire giraffe visible",
+            ])
+            if "savana" in texto or "savanna" in texto:
+                extras.append("savanna landscape")
+        elif tatuagem and (onca or "onca" in texto or "jaguar" in texto or "pintada" in texto):
+            extras.extend([
+                "jaguar tattoo design",
+                "clear jaguar illustration",
+                "recognizable jaguar face and rosette spots",
+                "clean tattoo linework",
+                "tattoo stencil design",
+            ])
+        elif "animal" in categoria:
+            extras.extend([
+                "realistic animal anatomy",
+                "full body visible",
                 "natural body proportions",
-                "centered composition",
-                "wide shot",
-                "medium distance camera",
-                "clear space around the animal",
-                "no cropping",
-                "animal completely inside the frame",
             ])
 
         if "pessoa" in categoria:
-
-            partes.extend([
-                "full person",
-                "correct anatomy",
-            ])
+            extras.extend(["natural human anatomy", "natural body proportions"])
 
         if "veiculo" in categoria:
-
-            partes.extend([
-                "complete vehicle",
-                "entire vehicle fully visible",
-                "full vehicle from front to rear",
-                "vehicle completely inside the frame",
-                "wide shot",
-                "medium distance camera",
-                "distant camera",
-                "clear space around the vehicle",
-                "no part of the vehicle cropped",
-                "side view or three-quarter view",
+            extras.extend([
+                "complete vehicle visible",
                 "correct vehicle proportions",
             ])
 
-        if "paisagem" in categoria:
-
-            partes.extend([
-                "detailed environment",
+        if bicicleta:
+            extras.extend([
+                "complete bicycle with both wheels visible",
+                "cyclist riding in a designated bike lane",
+                "natural riding posture",
                 "natural perspective",
+                "coherent environment"
             ])
 
-        if "objeto" in categoria:
+        if "paisagem" in categoria and not cavalo and not girafa:
+            extras.append("natural perspective, coherent environment")
 
-            partes.extend([
-                "complete object",
-                "correct shape",
-            ])
+        if any(x in texto for x in ("laco", "lacinho")):
+            extras.append("clearly visible bow accessory")
 
-        if any(
-            termo in texto
-            for termo in [
-                "pista de corrida",
-                "pista corrida",
-                "autódromo",
-                "autodromo",
-                "circuito",
-            ]
-        ):
-
-            partes.extend([
-                "professional racetrack",
-                "racing circuit",
-                "visible asphalt track",
-                "racetrack surroundings visible",
-                "wide racing scene",
-                "track clearly visible in the composition",
-            ])
-
-        if "futurista" in texto:
-            partes.append("futuristic")
-
-        if "à noite" in texto or "a noite" in texto:
-            partes.append("night scene")
-
-        if "pôr do sol" in texto:
-            partes.append("sunset")
-
-        if "nascer do sol" in texto:
-            partes.append("sunrise")
+        if "rosa" in texto and "veiculo" in categoria:
+            extras.append("vehicle paint is pink, preserve requested color")
 
         if "fotografia" in texto or "foto" in texto:
-            partes.append("photorealistic")
+            extras.append("photorealistic")
+        if "cinematografico" in texto or "cinematografica" in texto:
+            extras.append("cinematic")
 
-        if "cinematográfico" in texto or "cinematografica" in texto:
-            partes.append("cinematic")
-
-        return ", ".join(partes)
+        resultado = [prompt]
+        vistos = {self._normalizar(prompt)}
+        for extra in extras:
+            chave = self._normalizar(extra)
+            if chave not in vistos:
+                resultado.append(extra)
+                vistos.add(chave)
+        return ", ".join(resultado)

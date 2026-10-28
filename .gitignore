@@ -1,4 +1,4 @@
-﻿# Ambiente virtual e caches Python
+# Ambiente virtual e caches Python
 .venv/
 venv/
 __pycache__/
@@ -31,3 +31,9 @@ generated/*
 
 # Configurações locais de ferramentas
 .modal/
+# Dados locais e imagens geradas
+geraarteia.db
+geraarteia.db-*
+outputs/
+*.sqlite
+*.sqlite3

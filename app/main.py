@@ -1,15 +1,15 @@
 from datetime import datetime
-import os
+from pathlib import Path
 
-from .generator import GeraArteIA
-
-
-MODEL_ID = "stable-diffusion-v1-5/stable-diffusion-v1-5"
+from app.generator import GeraArteIA
+from app.prompt_optimizer import PromptOptimizer
+from app.config import OUTPUTS_DIR
 
 
 def abrir_imagem(caminho):
-    """Abre a imagem gerada automaticamente no visualizador padrão do Windows."""
+    """Abre a imagem gerada no visualizador padrão do Windows."""
     try:
+        import os
         os.startfile(str(caminho))
     except Exception as erro:
         print()
@@ -17,7 +17,6 @@ def abrir_imagem(caminho):
 
 
 def main():
-
     print()
     print("=" * 55)
     print("                    GeraArteIA")
@@ -26,21 +25,24 @@ def main():
     print("Carregando inteligência artificial...")
     print()
 
-    gerador = GeraArteIA(MODEL_ID)
+    gerador = GeraArteIA()
 
     try:
-        gerador.carregar_modelo()
+        gerador.pipeline()
+        print("Modelo carregado com sucesso.")
     except Exception as erro:
         print()
         print("Não foi possível carregar o modelo.")
         print(f"Erro: {erro}")
         return
 
-    while True:
+    OUTPUTS_DIR_PATH = Path(OUTPUTS_DIR)
+    OUTPUTS_DIR_PATH.mkdir(parents=True, exist_ok=True)
 
+    while True:
         print()
         print("=" * 55)
-        print("              NOVA IMAGEM")
+        print("                  NOVA IMAGEM")
         print("=" * 55)
         print()
         print("O que você deseja gerar?")
@@ -53,22 +55,34 @@ def main():
             print("Digite uma descrição para gerar a imagem.")
             continue
 
-        data_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
+        prompt_final = PromptOptimizer.otimizar(prompt)
+        negativo = PromptOptimizer.prompt_negativo()
 
+        print()
+        print("Preparando descrição otimizada...")
+        print("Gerando imagem...")
+
+        data_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
         nome_arquivo = f"imagem_{data_hora}.png"
+        caminho = OUTPUTS_DIR_PATH / nome_arquivo
 
         try:
-
-            caminho = gerador.gerar(
-                prompt=prompt,
-                nome_arquivo=nome_arquivo,
+            imagem = gerador.generate(
+                prompt=prompt_final,
+                negative_prompt=negativo,
+                steps=25,
+                width=512,
+                height=512,
             )
 
+            imagem.save(caminho, format="PNG")
+
             print()
             print("=" * 55)
-            print("              IMAGEM PRONTA!")
+            print("                  IMAGEM PRONTA!")
             print("=" * 55)
             print()
+            print(f"Prompt original: {prompt}")
             print(f"Arquivo: {caminho}")
             print()
             print("Abrindo imagem...")
@@ -76,29 +90,29 @@ def main():
             abrir_imagem(caminho)
 
             print()
-            resposta = input("Deseja gerar outra imagem? (S/N): ").strip().lower()
+            resposta = input(
+                "Deseja gerar outra imagem? (S/N): "
+            ).strip().lower()
 
-            if resposta not in ["s", "sim"]:
+            if resposta not in ("s", "sim"):
                 print()
-                print("=" * 55)
-                print("              GeraArteIA encerrado.")
-                print("=" * 55)
-                print()
+                print("GeraArteIA encerrado.")
                 break
 
         except Exception as erro:
-
             print()
             print("=" * 55)
-            print("             ERRO NA GERAÇÃO")
+            print("                 ERRO NA GERAÇÃO")
             print("=" * 55)
             print()
             print(f"Erro: {erro}")
             print()
 
-            tentar = input("Deseja tentar novamente? (S/N): ").strip().lower()
+            tentar = input(
+                "Deseja tentar novamente? (S/N): "
+            ).strip().lower()
 
-            if tentar not in ["s", "sim"]:
+            if tentar not in ("s", "sim"):
                 break
 
 

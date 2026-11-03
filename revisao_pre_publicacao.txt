@@ -1,0 +1,1749 @@
+﻿REVISAO GERAARTEIA - 10/27/2026 23:17:12
+
+=== DIFF DOS ARQUIVOS DE CODIGO ===
+diff --git a/.gitignore b/.gitignore
+index abb81bb..825632d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,4 +1,4 @@
+-´╗┐# Ambiente virtual e caches Python
++# Ambiente virtual e caches Python
+ .venv/
+ venv/
+ __pycache__/
+@@ -31,3 +31,9 @@ generated/*
+ 
+ # Configura├º├Áes locais de ferramentas
+ .modal/
++# Dados locais e imagens geradas
++geraarteia.db
++geraarteia.db-*
++outputs/
++*.sqlite
++*.sqlite3
+diff --git a/app/database.py b/app/database.py
+index 4cbed2c..248edaf 100644
+--- a/app/database.py
++++ b/app/database.py
+@@ -1,110 +1,192 @@
+ ´╗┐import sqlite3
+ from pathlib import Path
+ 
+-from app.config import BASE_DIR
+-
++BASE_DIR = Path(__file__).resolve().parent.parent
+ DATABASE_PATH = BASE_DIR / "geraarteia.db"
+ 
+ 
+-def conectar():
+-    conexao = sqlite3.connect(DATABASE_PATH, timeout=10)
+-    conexao.row_factory = sqlite3.Row
+-    return conexao
++def get_db_connection():
++    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
++    conn.row_factory = sqlite3.Row
++    return conn
+ 
+ 
+-def inicializar_banco():
+-    with conectar() as conexao:
+-        conexao.execute("""
++def init_db():
++    with get_db_connection() as conn:
++        conn.execute("""
+             CREATE TABLE IF NOT EXISTS geracoes (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 prompt TEXT NOT NULL,
+-                arquivo TEXT NOT NULL,
+-                criado_em TEXT NOT NULL DEFAULT (
+-                    strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')
+-                ),
+-                nota INTEGER CHECK (nota IS NULL OR nota BETWEEN 0 AND 10)
++                image_path TEXT NOT NULL,
++                rating INTEGER DEFAULT NULL,
++                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+             )
+         """)
+-        conexao.execute("""
+-            CREATE INDEX IF NOT EXISTS idx_geracoes_criado_em
+-            ON geracoes (criado_em)
+-        """)
+ 
++        existentes = {
++            row["name"]
++            for row in conn.execute("PRAGMA table_info(geracoes)").fetchall()
++        }
++
++        novas_colunas = {
++            "optimized_prompt": "TEXT",
++            "satisfaction_pct": "INTEGER",
++            "steps": "INTEGER",
++            "width": "INTEGER",
++            "height": "INTEGER",
++            "review_required": "INTEGER NOT NULL DEFAULT 0",
++            "review_status": "TEXT NOT NULL DEFAULT 'nao_avaliada'",
++            "feedback": "TEXT",
++        }
+ 
+-def registrar_geracao(prompt, arquivo):
+-    with conectar() as conexao:
+-        cursor = conexao.execute(
+-            "INSERT INTO geracoes (prompt, arquivo) VALUES (?, ?)",
+-            (prompt, arquivo),
+-        )
++        for coluna, tipo in novas_colunas.items():
++            if coluna not in existentes:
++                conn.execute(
++                    f"ALTER TABLE geracoes ADD COLUMN {coluna} {tipo}"
++                )
++
++
++def registrar_geracao(
++    prompt: str,
++    image_path: str,
++    optimized_prompt: str = "",
++    steps: int = 25,
++    width: int = 512,
++    height: int = 512,
++):
++    with get_db_connection() as conn:
++        cursor = conn.execute("""
++            INSERT INTO geracoes
++                (prompt, image_path, optimized_prompt, steps, width, height)
++            VALUES (?, ?, ?, ?, ?, ?)
++        """, (
++            prompt, image_path, optimized_prompt, steps, width, height
++        ))
+         return cursor.lastrowid
+ 
+ 
+-def avaliar_geracao(geracao_id, nota):
+-    if not 0 <= nota <= 10:
++def avaliar_geracao(
++    geracao_id: int,
++    rating: int,
++    satisfaction_pct: int,
++    feedback: str = "",
++):
++    if not 0 <= rating <= 10:
+         raise ValueError("A nota deve estar entre 0 e 10.")
+ 
+-    with conectar() as conexao:
+-        cursor = conexao.execute(
+-            "UPDATE geracoes SET nota = ? WHERE id = ?",
+-            (nota, geracao_id),
+-        )
+-        return cursor.rowcount > 0
++    if satisfaction_pct not in (20, 40, 60, 80, 100):
++        raise ValueError("Percentual de satisfa├º├úo inv├ílido.")
++
++    revisar = rating < 5 and satisfaction_pct < 60
++    status = "pendente" if revisar else "nao_requerida"
++
++    with get_db_connection() as conn:
++        cursor = conn.execute("""
++            UPDATE geracoes
++            SET rating = ?,
++                satisfaction_pct = ?,
++                review_required = ?,
++                review_status = ?,
++                feedback = ?
++            WHERE id = ?
++        """, (
++            rating,
++            satisfaction_pct,
++            int(revisar),
++            status,
++            feedback.strip(),
++            geracao_id,
++        ))
++
++        if cursor.rowcount == 0:
++            raise ValueError("Gera├º├úo n├úo encontrada.")
+ 
++    return {
++        "id": geracao_id,
++        "review_required": revisar,
++        "review_status": status,
++    }
+ 
+-def obter_estatisticas():
+-    with conectar() as conexao:
+-        resumo = conexao.execute("""
+-            SELECT
+-                COUNT(*) AS total_geracoes,
+-                COUNT(nota) AS total_avaliacoes,
+-                ROUND(AVG(nota), 2) AS media_satisfacao
+-            FROM geracoes
+-        """).fetchone()
+ 
+-        notas = conexao.execute("""
+-            SELECT nota, COUNT(*) AS quantidade
++def atualizar_avaliacao(
++    geracao_id: int,
++    rating: int,
++    satisfaction_pct: int = 100,
++    feedback: str = "",
++):
++    return avaliar_geracao(
++        geracao_id, rating, satisfaction_pct, feedback
++    )
++
++
++def obter_historico(limit: int = 10):
++    limit = max(1, min(int(limit), 200))
++    with get_db_connection() as conn:
++        return conn.execute(
++            "SELECT * FROM geracoes ORDER BY id DESC LIMIT ?",
++            (limit,),
++        ).fetchall()
++
++
++def obter_estatisticas():
++    with get_db_connection() as conn:
++        total = conn.execute(
++            "SELECT COUNT(*) FROM geracoes"
++        ).fetchone()[0]
++
++        avaliadas = conn.execute(
++            "SELECT COUNT(*) FROM geracoes WHERE rating IS NOT NULL"
++        ).fetchone()[0]
++
++        media = conn.execute(
++            "SELECT AVG(rating) FROM geracoes WHERE rating IS NOT NULL"
++        ).fetchone()[0]
++
++        revisoes = conn.execute(
++            "SELECT COUNT(*) FROM geracoes WHERE review_required = 1 "
++            "AND review_status = 'pendente'"
++        ).fetchone()[0]
++
++        satisfacao = conn.execute("""
++            SELECT satisfaction_pct, COUNT(*) AS total
+             FROM geracoes
+-            WHERE nota IS NOT NULL
+-            GROUP BY nota
+-            ORDER BY nota
++            WHERE satisfaction_pct IS NOT NULL
++            GROUP BY satisfaction_pct
++            ORDER BY satisfaction_pct
+         """).fetchall()
+ 
+     return {
+-        "total_geracoes": resumo["total_geracoes"],
+-        "total_avaliacoes": resumo["total_avaliacoes"],
+-        "media_satisfacao": resumo["media_satisfacao"],
+-        "avaliacoes": [
+-            {"nota": item["nota"], "quantidade": item["quantidade"]}
+-            for item in notas
+-        ],
++        "total_geradas": total,
++        "total_avaliadas": avaliadas,
++        "media_avaliacao": round(media, 1) if media is not None else 0.0,
++        "revisoes_pendentes": revisoes,
++        "distribuicao_satisfacao": {
++            str(row["satisfaction_pct"]): row["total"]
++            for row in satisfacao
++        },
+     }
+ 
+ 
+-inicializar_banco()
++def obter_fila_revisao(limit: int = 100):
++    limit = max(1, min(int(limit), 500))
++    with get_db_connection() as conn:
++        return conn.execute("""
++            SELECT * FROM geracoes
++            WHERE review_required = 1 AND review_status = 'pendente'
++            ORDER BY id DESC LIMIT ?
++        """, (limit,)).fetchall()
+ 
+ 
++def concluir_revisao(geracao_id: int):
++    with get_db_connection() as conn:
++        cursor = conn.execute("""
++            UPDATE geracoes
++            SET review_status = 'concluida'
++            WHERE id = ? AND review_required = 1
++        """, (geracao_id,))
+ 
+-def obter_historico(limite=30):
+-    with conectar() as conexao:
+-        linhas = conexao.execute(
+-            """
+-            SELECT id, prompt, arquivo, criado_em, nota
+-            FROM geracoes
+-            ORDER BY id DESC
+-            LIMIT ?
+-            """,
+-            (limite,),
+-        ).fetchall()
++        if cursor.rowcount == 0:
++            raise ValueError("Caso de revis├úo pendente n├úo encontrado.")
+ 
+-    return [
+-        {
+-            "id": linha["id"],
+-            "prompt": linha["prompt"],
+-            "arquivo": linha["arquivo"],
+-            "criado_em": linha["criado_em"],
+-            "nota": linha["nota"],
+-            "imagem": f"/api/imagem/{linha['arquivo']}",
+-        }
+-        for linha in linhas
+-    ]
++
++init_db()
+diff --git a/app/generator.py b/app/generator.py
+index 26125f2..9720e46 100644
+--- a/app/generator.py
++++ b/app/generator.py
+@@ -1,43 +1,98 @@
+-´╗┐import os
++´╗┐import threading
++
+ import torch
+ from diffusers import StableDiffusionPipeline
++
+ from app.config import MODEL_NAME, DEVICE
+ 
++
+ class GeraArteIA:
++    """Carrega o modelo uma vez e reutiliza o pipeline."""
++
+     _instance = None
+-    _pipeline = None
++    _instance_lock = threading.Lock()
+ 
+     def __new__(cls):
+-        if cls._instance is None:
+-            cls._instance = super(GeraArteIA, cls).__new__(cls)
++        with cls._instance_lock:
++            if cls._instance is None:
++                obj = super().__new__(cls)
++                obj._pipeline = None
++                obj._pipeline_lock = threading.Lock()
++                obj._generation_lock = threading.Lock()
++                cls._instance = obj
+         return cls._instance
+ 
+-    @property
+     def pipeline(self):
+-        if self._pipeline is None:
+-            print("Carregando o modelo Stable Diffusion sob demanda...")
+-            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+-            self._pipeline = StableDiffusionPipeline.from_pretrained(
++        if self._pipeline is not None:
++            return self._pipeline
++
++        with self._pipeline_lock:
++            if self._pipeline is not None:
++                return self._pipeline
++
++            dtype = torch.float16 if DEVICE == "cuda" else torch.float32
++
++            pipe = StableDiffusionPipeline.from_pretrained(
+                 MODEL_NAME,
+                 torch_dtype=dtype,
+-                low_cpu_mem_usage=True
++                low_cpu_mem_usage=True,
+             )
+-            self._pipeline = self._pipeline.to(DEVICE)
+-            if torch.cuda.is_available():
+-                try:
+-                    self._pipeline.enable_attention_slicing()
+-                except Exception:
+-                    pass
++
++            if DEVICE == "cuda":
++                pipe.enable_attention_slicing()
++
++            pipe = pipe.to(DEVICE)
++            self._pipeline = pipe
++
+         return self._pipeline
+ 
+-    def generate(self, prompt: str, negative_prompt: str = "", steps: int = 30, width: int = 512, height: int = 512):
+-        pipe = self.pipeline
+-        with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
+-            image = pipe(
+-                prompt=prompt,
+-                negative_prompt=negative_prompt if negative_prompt else None,
+-                num_inference_steps=steps,
+-                width=width,
+-                height=height
+-            ).images[0]
+-        return image
++    def generate(
++        self,
++        prompt,
++        negative_prompt="",
++        steps=25,
++        width=512,
++        height=512,
++    ):
++        if not isinstance(prompt, str) or not prompt.strip():
++            raise ValueError("Informe uma descri├º├úo para gerar a imagem.")
++
++        if not isinstance(steps, int) or not 1 <= steps <= 50:
++            raise ValueError("Os passos devem estar entre 1 e 50.")
++
++        for nome, valor in (("largura", width), ("altura", height)):
++            if not isinstance(valor, int) or not 256 <= valor <= 768:
++                raise ValueError(
++                    f"A {nome} deve estar entre 256 e 768 pixels."
++                )
++            if valor % 8 != 0:
++                raise ValueError(f"A {nome} deve ser m├║ltipla de 8.")
++
++        pipe = self.pipeline()
++
++        try:
++            with self._generation_lock, torch.inference_mode():
++                resultado = pipe(
++                    prompt=prompt.strip(),
++                    negative_prompt=negative_prompt.strip() or None,
++                    num_inference_steps=steps,
++                    width=width,
++                    height=height,
++                )
++
++            return resultado.images[0]
++
++        except (torch.cuda.OutOfMemoryError, RuntimeError) as exc:
++            mensagem = str(exc).lower()
++
++            if "out of memory" in mensagem or "cuda" in mensagem:
++                if torch.cuda.is_available():
++                    torch.cuda.empty_cache()
++
++                raise RuntimeError(
++                    "A mem├│ria dispon├¡vel foi insuficiente para gerar "
++                    "a imagem. Tente resolu├º├úo de 256 ou 384 pixels, "
++                    "ou utilize uma m├íquina com mais mem├│ria."
++                ) from exc
++
++            raise
+diff --git a/app/prompt_optimizer.py b/app/prompt_optimizer.py
+index 0b7effc..05b98f4 100644
+--- a/app/prompt_optimizer.py
++++ b/app/prompt_optimizer.py
+@@ -1,150 +1,134 @@
+ ´╗┐import re
+ import unicodedata
+ 
++
+ class PromptOptimizer:
+-    def __init__(self):
+-        self.animal_keywords = [
+-            "cavalo", "cavalos", "egua", "eguas", "potro", "potros",
+-            "cachorro", "cao", "caes", "gato", "gatos", "leao", "leoes",
+-            "onca", "oncas", "jaguar", "jaguares", "elefante", "girafa",
+-            "girafas", "zebra", "boi", "vaca", "touro", "urso", "lobo",
+-            "passaro", "animal", "animais",
+-        ]
+-        self.person_keywords = [
+-            "homem", "mulher", "menino", "menina", "crianca", "pessoa",
+-            "pessoas", "jovem", "idoso", "idosa", "rapaz", "moca", "ciclista",
+-        ]
+-        self.vehicle_keywords = [
+-            "carro", "automovel", "veiculo", "suv", "moto", "motocicleta",
+-            "caminhao", "onibus", "bicicleta", "bicicletas", "bike",
+-        ]
+-        self.landscape_keywords = [
+-            "paisagem", "praia", "montanha", "floresta", "campo", "cidade",
+-            "deserto", "lago", "rio", "cachoeira", "savana", "pastagem",
+-            "pasto", "ciclovia",
+-        ]
+-        self.object_keywords = [
+-            "mesa", "cadeira", "computador", "celular", "telefone",
+-            "relogio", "copo", "garrafa", "livro", "camera", "laco",
+-            "lacinho", "gravata", "brinco",
+-        ]
++    """Melhora prompts em portugu├¬s para orientar a gera├º├úo de imagens."""
+ 
+     @staticmethod
+     def _normalizar(texto: str) -> str:
+-        texto = unicodedata.normalize("NFKD", texto.lower())
+-        texto = "".join(c for c in texto if not unicodedata.combining(c))
++        texto = unicodedata.normalize("NFD", texto.lower())
++        texto = "".join(
++            caractere for caractere in texto
++            if unicodedata.category(caractere) != "Mn"
++        )
+         return re.sub(r"\s+", " ", texto).strip()
+ 
+-    def detectar_categoria(self, texto: str) -> str:
+-        normalizado = self._normalizar(texto)
+-        grupos = [
+-            ("animal", self.animal_keywords),
+-            ("pessoa", self.person_keywords),
+-            ("veiculo", self.vehicle_keywords),
+-            ("paisagem", self.landscape_keywords),
+-            ("objeto", self.object_keywords),
+-        ]
+-        categorias = [
+-            categoria for categoria, palavras in grupos
+-            if any(self._normalizar(p) in normalizado for p in palavras)
+-        ]
+-        if any(x in normalizado for x in ("tatuagem", "tattoo")):
+-            categorias.append("tatuagem")
+-        return "+".join(dict.fromkeys(categorias)) if categorias else "geral"
+-
+-    def otimizar(self, prompt: str) -> str:
+-        prompt = re.sub(r"\s+", " ", prompt.strip())
+-        if not prompt:
++    @classmethod
++    def detectar_categoria(cls, prompt: str) -> str:
++        """Identifica a categoria principal descrita no prompt."""
++        texto = cls._normalizar(prompt or "")
++
++        if any(p in texto for p in ("tatuagem", "tattoo")):
++            return "tatuagem"
++        if any(p in texto for p in (
++            "ciclista", "bicicleta", "bike", "ciclovia"
++        )):
++            return "pessoa e bicicleta"
++        if any(p in texto for p in (
++            "suv", "carro", "automovel", "veiculo", "caminhao"
++        )):
++            return "ve├¡culo"
++        if any(p in texto for p in (
++            "girafa", "cavalo", "onca", "jaguar", "leao", "tigre",
++            "cachorro", "cao", "gato", "elefante", "animal", "passaro"
++        )):
++            return "animal"
++        if any(p in texto for p in (
++            "pessoa", "homem", "mulher", "rosto", "retrato"
++        )):
++            return "pessoa"
++        return "geral"
++
++    @classmethod
++    def otimizar(cls, prompt: str) -> str:
++        if not isinstance(prompt, str) or not prompt.strip():
+             return ""
+ 
+-        texto = self._normalizar(prompt).replace("-", " ")
+-        categoria = self.detectar_categoria(prompt)
+-        extras = []
+-
+-        cavalo = any(x in texto for x in (
+-            "cavalo", "cavalos", "egua", "eguas", "potro", "potros"
+-        ))
+-        girafa = "girafa" in texto
+-        onca = any(x in texto for x in ("onca", "on├ºa", "jaguar"))
+-        tatuagem = any(x in texto for x in ("tatuagem", "tattoo"))
+-        bicicleta = any(x in texto for x in (
+-            "bicicleta", "bicicletas", "bike", "ciclista", "biciclista"
+-        ))
+-
+-        if cavalo:
+-            extras.extend([
+-                "photorealistic horse",
+-                "anatomically plausible horse with four legs",
+-                "four anatomically correct separate legs",
+-                "realistic joints and hooves",
+-                "full body animal, complete head and face, full body visible, head to hooves",
+-                "natural horse proportions",
+-            ])
+-            if any(x in texto for x in ("correndo", "galopando", "galope", "corrida")):
+-                extras.append("realistic galloping horse, clear leg separation")
+-            elif any(x in texto for x in ("parado", "pastando", "em pe")):
+-                extras.append("horse standing naturally on four legs")
+-        elif girafa:
+-            extras.extend([
+-                "realistic giraffe",
+-                "long natural giraffe neck",
+-                "four visible legs",
+-                "entire giraffe visible",
+-            ])
+-            if "savana" in texto or "savanna" in texto:
+-                extras.append("savanna landscape")
+-        elif tatuagem and (onca or "onca" in texto or "jaguar" in texto or "pintada" in texto):
+-            extras.extend([
+-                "jaguar tattoo design",
+-                "clear jaguar illustration",
+-                "recognizable jaguar face and rosette spots",
+-                "clean tattoo linework",
+-                "tattoo stencil design",
+-            ])
+-        elif "animal" in categoria:
+-            extras.extend([
+-                "realistic animal anatomy",
+-                "full body visible",
+-                "natural body proportions",
+-            ])
+-
+-        if "pessoa" in categoria:
+-            extras.extend(["natural human anatomy", "natural body proportions"])
+-
+-        if "veiculo" in categoria:
+-            extras.extend([
+-                "complete vehicle visible",
+-                "correct vehicle proportions",
+-            ])
+-
+-        if bicicleta:
+-            extras.extend([
+-                "complete bicycle with both wheels visible",
+-                "cyclist riding in a designated bike lane",
+-                "natural riding posture",
+-                "natural perspective",
+-                "coherent environment"
+-            ])
+-
+-        if "paisagem" in categoria and not cavalo and not girafa:
+-            extras.append("natural perspective, coherent environment")
+-
+-        if any(x in texto for x in ("laco", "lacinho")):
+-            extras.append("clearly visible bow accessory")
+-
+-        if "rosa" in texto and "veiculo" in categoria:
+-            extras.append("vehicle paint is pink, preserve requested color")
+-
+-        if "fotografia" in texto or "foto" in texto:
+-            extras.append("photorealistic")
+-        if "cinematografico" in texto or "cinematografica" in texto:
+-            extras.append("cinematic")
+-
+-        resultado = [prompt]
+-        vistos = {self._normalizar(prompt)}
+-        for extra in extras:
+-            chave = self._normalizar(extra)
+-            if chave not in vistos:
+-                resultado.append(extra)
+-                vistos.add(chave)
+-        return ", ".join(resultado)
++        original = prompt.strip()
++        texto = cls._normalizar(original)
++        categoria = cls.detectar_categoria(original)
++
++        if "tatuagem" in texto or "tattoo" in texto:
++            if any(p in texto for p in ("onca", "jaguar")):
++                complemento = (
++                    "tattoo design, jaguar tattoo, clean tattoo linework, "
++                    "clear silhouette, detailed spots, professional tattoo art"
++                )
++            else:
++                complemento = (
++                    "tattoo design, clean linework, clear outlines, "
++                    "balanced composition, professional tattoo artwork"
++                )
++
++        elif "girafa" in texto:
++            complemento = (
++                "long natural giraffe neck, complete giraffe visible from "
++                "head to hooves, anatomically correct giraffe, four legs, "
++                "savanna landscape, African savanna, natural wildlife photography"
++            )
++
++        elif "cavalo" in texto:
++            complemento = (
++                "full body animal, complete head and face, "
++                "anatomically plausible horse with four legs, "
++                "anatomically correct horse, four visible legs, "
++                "realistic galloping horse, natural equine proportions, complete body"
++            )
++
++        elif any(p in texto for p in ("suv", "carro", "automovel", "veiculo")):
++            complemento = (
++                "complete vehicle visible, realistic automotive proportions, "
++                "four wheels, coherent paint and reflections, detailed vehicle"
++            )
++            if "rosa" in texto and any(p in texto for p in ("laco", "la├ºo")):
++                complemento += (
++                    ", pink SUV, clearly visible bow accessory, vehicle paint is pink, pink bow clearly visible on the vehicle, "
++                    "realistic bow, preserve requested pink color"
++                )
++
++        elif any(p in texto for p in ("ciclista", "bicicleta", "bike", "ciclovia")):
++            complemento = (
++                "cyclist riding a bicycle on a clearly visible bike lane, "
++                "realistic bicycle frame, both wheels visible, two wheels, natural riding posture, anatomically correct "
++                "rider, hands holding handlebars, complete bicycle visible"
++            )
++
++        elif any(p in texto for p in ("onca", "jaguar")):
++            complemento = (
++                "anatomically accurate jaguar, complete visible body, "
++                "natural golden coat with realistic black rosettes, "
++                "realistic wildlife photography"
++            )
++
++        elif categoria == "animal":
++            complemento = (
++                "full body animal, anatomically correct body, natural "
++                "proportions, clearly visible limbs, realistic details"
++            )
++
++        else:
++            complemento = (
++                "well-composed image, clear subject, coherent lighting, "
++                "consistent perspective, detailed textures, high visual quality"
++            )
++
++        if complemento.lower() in texto:
++            return original
++
++        return f"{original}, {complemento}"
++
++    @classmethod
++    def prompt_negativo(cls) -> str:
++        return (
++            "low quality, blurry, distorted anatomy, deformed body, "
++            "extra limbs, missing limbs, extra legs, missing legs, "
++            "extra fingers, malformed hands, duplicate objects, "
++            "cropped subject, out of frame, incorrect proportions, "
++            "unrealistic perspective, text, watermark"
++        )
++
++
++
++
++
+diff --git a/modal_app.py b/modal_app.py
+index d493a06..c7a9de1 100644
+--- a/modal_app.py
++++ b/modal_app.py
+@@ -1,116 +1,171 @@
+-´╗┐import modal
++´╗┐import json
++import sqlite3
++from datetime import datetime, timezone
++from pathlib import Path
++from uuid import uuid4
+ 
+-app = modal.App("geraarteia-tcc-asgi")
++import modal
+ 
+-image = (
++APP_NAME = "geraarteia-tcc-asgi"
++DATA_DIR = Path("/data")
++OUTPUT_DIR = DATA_DIR / "outputs"
++BAD_DIR = DATA_DIR / "revisao"
++DB_PATH = DATA_DIR / "geraarteia_modal.db"
++MODEL_ID = "stable-diffusion-v1-5/stable-diffusion-v1-5"
++
++app = modal.App(APP_NAME)
++storage = modal.Volume.from_name("geraarteia-data", create_if_missing=True)
++model_image = (
+     modal.Image.debian_slim(python_version="3.11")
++    .apt_install("libglib2.0-0", "libgl1")
+     .pip_install(
+-        "fastapi[standard]",
+-        "uvicorn",
+-        "torch",
+-        "diffusers",
+-        "transformers",
+-        "accelerate",
+-        "safetensors",
+-        "pydantic",
+-        "huggingface_hub"
++        "fastapi[standard]", "uvicorn", "torch", "diffusers>=0.30.0",
++        "transformers>=4.41,<5", "accelerate", "safetensors", "pillow"
+     )
+ )
+ 
++
++def init_db():
++    DATA_DIR.mkdir(parents=True, exist_ok=True)
++    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
++    BAD_DIR.mkdir(parents=True, exist_ok=True)
++    with sqlite3.connect(DB_PATH) as con:
++        con.execute("""CREATE TABLE IF NOT EXISTS generations (
++            id TEXT PRIMARY KEY, prompt TEXT NOT NULL, image_path TEXT NOT NULL,
++            created_at TEXT NOT NULL, rating TEXT, feedback TEXT, flagged_bad INTEGER DEFAULT 0
++        )""")
++        con.commit()
++
++
+ @app.function(
+-    image=image,
++    image=model_image,
+     gpu="any",
+     timeout=900,
+-    scaledown_window=300
++    scaledown_window=300,
++    volumes={"/data": storage} ,
+ )
+ @modal.asgi_app()
+ def fastapi_app():
+-    from fastapi import FastAPI, Request, Form
+-    from fastapi.responses import HTMLResponse
+-    import base64
+-    import io
+-    import torch
++    from fastapi import FastAPI, Form, HTTPException
++    from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
++    from fastapi.staticfiles import StaticFiles
+     from diffusers import StableDiffusionPipeline
++    import torch
+ 
+-    web_app = FastAPI()
++    web = FastAPI(title="GeraArteIA")
++    init_db()
++    pipeline_cache = {"pipe": None}
+ 
+-    # Carregamento do modelo sob demanda na GPU
+-    @web_app.get("/", response_class=HTMLResponse)
+-    async def index(prompt: str = "Um carro desportivo na estrada"):
+-        error_msg = ""
+-        img_str = ""
+-        try:
+-            model_id = "stable-diffusion-v1-5/stable-diffusion-v1-5"
++    def get_pipe():
++        if pipeline_cache["pipe"] is None:
+             dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+-            
+             pipe = StableDiffusionPipeline.from_pretrained(
+-                model_id,
+-                torch_dtype=dtype,
+-                low_cpu_mem_usage=True
++                MODEL_ID, torch_dtype=dtype, low_cpu_mem_usage=True
+             )
+-            device = "cuda" if torch.cuda.is_available() else "cpu"
+-            pipe = pipe.to(device)
+-            
+-            if torch.cuda.is_available():
+-                try:
+-                    pipe.enable_attention_slicing()
+-                except Exception:
+-                    pass
+-
+-            with torch.autocast(device if device == "cuda" else "cpu"):
+-                image = pipe(
+-                    prompt=prompt,
+-                    num_inference_steps=20,
+-                    width=512,
+-                    height=512
+-                ).images[0]
+-            
+-            buffered = io.BytesIO()
+-            image.save(buffered, format="PNG")
+-            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+-        except Exception as e:
+-            error_msg = str(e)
+-
+-        html = f"""
+-        <!DOCTYPE html>
+-        <html lang="pt">
+-        <head>
+-            <meta charset="UTF-8">
+-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+-            <title>GeraArteIA - TCC</title>
+-            <style>
+-                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; text-align: center; padding: 20px; margin: 0; }}
+-                .container {{ max-width: 650px; margin: 30px auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+-                h1 {{ color: #38bdf8; font-size: 26px; margin-bottom: 5px; }}
+-                p {{ color: #94a3b8; font-size: 14px; margin-bottom: 25px; }}
+-                form {{ display: flex; flex-direction: column; gap: 12px; align-items: center; }}
+-                input[type="text"] {{ width: 90%; padding: 14px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: white; font-size: 16px; outline: none; }}
+-                button {{ background: #0ea5e9; color: white; border: none; padding: 12px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; }}
+-                button:hover {{ background: #0284c7; }}
+-                .image-box {{ margin-top: 30px; }}
+-                img {{ max-width: 100%; height: auto; border-radius: 8px; border: 2px solid #334155; box-shadow: 0 5px 15px rgba(0,0,0,0.4); }}
+-                .loading {{ font-size: 14px; color: #38bdf8; margin-top: 15px; display: none; font-weight: bold; }}
+-                .error {{ color: #f87171; background: #451a03; padding: 10px; border-radius: 6px; margin-top: 15px; }}
+-            </style>
+-            <script>
+-                function showLoading() {{ document.getElementById('load-msg').style.display = 'block'; }}
+-            </script>
+-        </head>
+-        <body>
+-            <div class="container">
+-                <h1>­ƒÄ¿ GeraArteIA</h1>
+-                <p>Trabalho de Conclus├úo de Curso (TCC) - Gera├º├úo de Arte com IA</p>
+-                <form method="GET" action="/" onsubmit="showLoading()">
+-                    <input type="text" name="prompt" value="{prompt}" placeholder="Descreva a imagem..." required>
+-                    <button type="submit">Ô£¿ Gerar Imagem</button>
+-                </form>
+-                <div id="load-msg" class="loading">A processar na GPU do Modal (aguarde alguns segundos)...</div>
+-                {"<div class='error'><strong>Erro:</strong> " + error_msg + "</div>" if error_msg else ""}
+-                {("<div class='image-box'><img src='data:image/png;base64," + img_str + "' alt='Arte gerada por IA'></div>") if img_str else ""}
+-            </div>
+-        </body>
+-        </html>
+-        """
+-        return html
+-
+-    return web_app
++            pipe = pipe.to("cuda" if torch.cuda.is_available() else "cpu")
++            try:
++                pipe.enable_attention_slicing()
++            except Exception:
++                pass
++            pipeline_cache["pipe"] = pipe
++        return pipeline_cache["pipe"]
++
++    @web.get("/", response_class=HTMLResponse)
++    def home():
++        return HTMLResponse(r'''<!doctype html>
++<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
++<title>GeraArteIA</title><style>
++:root{color-scheme:dark;--bg:#0d1020;--panel:#171c31;--line:#303955;--text:#f4f6ff;--muted:#aab3ce;--blue:#7188ff;--purple:#a879f7;--green:#65d6a5;--red:#ff929e}
++*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#29234b 0,transparent 38%),radial-gradient(ellipse at 100% 15%,#1b3151 0,transparent 32%),var(--bg);color:var(--text);font:16px 'Segoe UI',Arial,sans-serif;min-height:100vh}.wrap{max-width:1050px;margin:auto;padding:32px 20px 55px}.brand{display:flex;align-items:center;gap:13px;margin-bottom:35px}.logo{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:linear-gradient(135deg,var(--blue),var(--purple));font-size:25px}.brand h1{font-size:27px;margin:0}.brand p{margin:5px 0 0;color:var(--muted);font-size:13px}.hero{text-align:center;max-width:760px;margin:0 auto 30px}.hero h2{font-size:clamp(25px,4vw,38px);margin:0 0 10px}.hero p{color:var(--muted);line-height:1.6;margin:0}.panel{max-width:800px;margin:0 auto 42px;background:#171c31eF;border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:0 18px 60px #0004}label{display:block;font-weight:650;margin:0 0 10px}textarea{width:100%;min-height:125px;resize:vertical;background:#0d1224;color:var(--text);border:1px solid #3b4565;border-radius:13px;padding:15px;font:16px/1.5 inherit;outline:none}textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px #7188ff22}.row{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-top:15px}.hint{color:var(--muted);font-size:12px}.btn{border:0;border-radius:11px;padding:13px 19px;font-weight:700;background:linear-gradient(135deg,var(--blue),var(--purple));color:white;cursor:pointer}.btn:disabled{opacity:.55;cursor:wait}.status{display:none;text-align:center;padding:22px 10px 8px;color:#dbe2ff}.spinner{width:42px;height:42px;margin:0 auto 12px;border:4px solid #424b6c;border-top-color:#9e8cff;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.progress{height:6px;max-width:360px;background:#2b3450;border-radius:99px;overflow:hidden;margin:14px auto}.progress span{display:block;width:35%;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--purple));animation:move 1.4s ease-in-out infinite alternate}@keyframes move{from{transform:translateX(-10%)}to{transform:translateX(190%)}}.error{display:none;margin-top:15px;padding:12px;border-radius:10px;color:#ffd4d8;background:#4a202d}.section-head{display:flex;justify-content:space-between;align-items:end;gap:15px;margin-bottom:16px}.section-head h2{margin:0;font-size:23px}.section-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.item{overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:16px}.item img{display:block;width:100%;aspect-ratio:1;object-fit:cover;background:#0a0d17}.meta{padding:13px}.prompt{font-size:13px;line-height:1.5;color:#dce2f7;overflow-wrap:anywhere;white-space:pre-wrap}.date{font-size:11px;color:var(--muted);margin:8px 0 12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions a,.actions button{font:600 12px inherit;text-decoration:none;color:#eef0ff;background:#2a3350;border:1px solid #414c70;border-radius:8px;padding:9px 11px;cursor:pointer}.actions .bad{color:#ffc4ca;border-color:#78404e}.empty{grid-column:1/-1;text-align:center;padding:35px;color:var(--muted);border:1px dashed var(--line);border-radius:15px}@media(min-width:750px){.gallery{grid-template-columns:repeat(5,minmax(0,1fr))}.item img{aspect-ratio:1}.wrap{padding-top:38px}}@media(max-width:520px){.row{align-items:stretch;flex-direction:column}.row .btn{width:100%}.panel{padding:17px}.gallery{gap:10px}.meta{padding:10px}.actions a,.actions button{padding:8px}.section-head h2{font-size:20px}}
++</style></head><body><main class="wrap"><header class="brand"><div class="logo">Ô£ª</div><div><h1>GeraArteIA</h1><p>Transforme sua ideia em imagem com intelig├¬ncia artificial</p></div></header>
++<section class="hero"><h2>O que voc├¬ quer criar hoje?</h2><p>Descreva a imagem com suas pr├│prias palavras. A IA vai transformar sua ideia em uma cria├º├úo visual.</p></section>
++<section class="panel"><form id="form"><label for="prompt">Descreva a imagem</label><textarea id="prompt" maxlength="1200" required placeholder="Ex.: Um cachorro golden retriever correndo em um parque ao p├┤r do sol, fotografia realista..."></textarea><div class="row"><span class="hint">Quanto mais detalhes, melhor a orienta├º├úo para a IA.</span><button class="btn" id="generate" type="submit">Ô£ª Gerar imagem</button></div></form>
++<div class="status" id="status" role="status" aria-live="polite"><div class="spinner"></div><strong>Gerando sua imagem...</strong><div class="progress"><span></span></div><div class="hint">A IA est├í trabalhando. Isso pode levar alguns minutos; mantenha esta p├ígina aberta.</div></div><div class="error" id="error"></div></section>
++<section><div class="section-head"><div><h2>Sua galeria</h2><p>As 10 imagens mais recentes ficam dispon├¡veis aqui.</p></div></div><div class="gallery" id="gallery"><div class="empty">Carregando galeria...</div></div></section>
++<footer style="text-align:center;margin:42px auto 0;padding:22px 12px 8px;border-top:1px solid #303955;color:#aab3ce;font-size:13px;line-height:1.8">
++  <div style="font-weight:600;color:#f4f6ff">GeraArteIA</div>
++  <div>Desenvolvido por Walter Muniz Santos e Luan Jesus Pereira Gomes</div>
++  <div>Trabalho de Conclus├úo de Curso ÔÇö Gera├º├úo de Imagens por Difus├úo</div>
++</footer>
++</main>
++<script>
++const form=document.getElementById('form'),promptBox=document.getElementById('prompt'),button=document.getElementById('generate'),statusBox=document.getElementById('status'),errorBox=document.getElementById('error'),gallery=document.getElementById('gallery');
++function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
++async function loadGallery(){try{const r=await fetch('/api/galeria');const data=await r.json();gallery.innerHTML=data.length?data.map(x=>`<article class="item"><a href="${x.url}" target="_blank" rel="noopener"><img src="${x.url}" loading="lazy" alt="Imagem gerada"></a><div class="meta"><div class="prompt">${esc(x.prompt)}</div><div class="date">${esc(x.created_at)}</div><div class="actions"><a href="${x.url}" target="_blank" rel="noopener">Abrir</a><a href="${x.url}" download>Baixar</a><button class="bad" onclick="flagBad('${x.id}')">ÔÜæ Imagem ruim</button></div></div></article>`).join(''):'<div class="empty">Voc├¬ ainda n├úo gerou imagens. Escreva um prompt acima para come├ºar.</div>'}catch(e){gallery.innerHTML='<div class="empty">N├úo foi poss├¡vel carregar a galeria agora.</div>'}}
++async function flagBad(id){if(!confirm('Sinalizar esta imagem para revis├úo e melhoria futura?'))return;try{const r=await fetch('/api/avaliar/'+encodeURIComponent(id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating:'ruim',feedback:'Sinalizada pelo usu├írio como imagem ruim'})});if(!r.ok)throw new Error('Falha ao salvar avalia├º├úo');alert('Imagem guardada na fila de revis├úo do Modal. Obrigado!');await loadGallery()}catch(e){alert('N├úo foi poss├¡vel registrar a avalia├º├úo. Tente novamente.')}}
++form.addEventListener('submit',async e=>{e.preventDefault();const prompt=promptBox.value.trim();if(!prompt)return;button.disabled=true;button.textContent='Gerando...';statusBox.style.display='block';errorBox.style.display='none';try{const r=await fetch('/api/gerar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});const data=await r.json();if(!r.ok)throw new Error(data.detail||'N├úo foi poss├¡vel gerar a imagem.');await loadGallery();gallery.scrollIntoView({behavior:'smooth',block:'start'});}catch(err){errorBox.textContent=err.message||'Ocorreu um erro durante a gera├º├úo.';errorBox.style.display='block'}finally{statusBox.style.display='none';button.disabled=false;button.textContent='Ô£ª Gerar imagem'}});
++loadGallery();
++</script></body></html>''')
++
++    @web.get("/api/galeria")
++    def gallery():
++        with sqlite3.connect(DB_PATH) as con:
++            con.row_factory = sqlite3.Row
++            rows = con.execute("SELECT * FROM generations ORDER BY created_at DESC LIMIT 10").fetchall()
++        return [{"id": r["id"], "prompt": r["prompt"], "created_at": r["created_at"],
++                 "url": "/outputs/" + Path(r["image_path"]).name, "flagged_bad": bool(r["flagged_bad"])} for r in rows]
++
++    @web.post("/api/gerar")
++    def generate(payload: dict):
++        prompt = str(payload.get("prompt", "")).strip()
++        if not prompt:
++            raise HTTPException(400, "Digite uma descri├º├úo para a imagem.")
++        if len(prompt) > 1200:
++            raise HTTPException(400, "O prompt deve ter at├® 1.200 caracteres.")
++        try:
++            pipe = get_pipe()
++            with torch.inference_mode():
++                result = pipe(prompt=prompt, num_inference_steps=20, width=512, height=512)
++            image = result.images[0]
++            generation_id = uuid4().hex
++            filename = f"{generation_id}.png"
++            target = OUTPUT_DIR / filename
++            image.save(target, format="PNG")
++            created = datetime.now(timezone.utc).isoformat(timespec="seconds")
++            with sqlite3.connect(DB_PATH) as con:
++                con.execute("INSERT INTO generations(id,prompt,image_path,created_at) VALUES(?,?,?,?)",
++                            (generation_id, prompt, str(target), created))
++                con.commit()
++            storage.commit()
++            return {"id": generation_id, "url": "/outputs/" + filename}
++        except Exception as exc:
++            print(f"[GeraArteIA] gera├º├úo falhou: {type(exc).__name__}: {exc}")
++            raise HTTPException(500, "A gera├º├úo falhou. Tente novamente em instantes.") from exc
++
++    @web.post("/api/avaliar/{generation_id}")
++    def rate(generation_id: str, payload: dict):
++        with sqlite3.connect(DB_PATH) as con:
++            con.row_factory = sqlite3.Row
++            row = con.execute("SELECT * FROM generations WHERE id=?", (generation_id,)).fetchone()
++            if row is None:
++                raise HTTPException(404, "Gera├º├úo n├úo encontrada.")
++            source = Path(row["image_path"])
++            if not source.is_file():
++                raise HTTPException(404, "Arquivo de imagem n├úo encontrado.")
++            bad_path = BAD_DIR / source.name
++            bad_path.write_bytes(source.read_bytes())
++            metadata = {"id": generation_id, "prompt": row["prompt"], "created_at": row["created_at"],
++                        "image_file": bad_path.name, "rating": "ruim", "feedback": str(payload.get("feedback", "")),
++                        "flagged_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
++                        "model": MODEL_ID, "review_status": "pendente"}
++            (BAD_DIR / f"{generation_id}.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
++            con.execute("UPDATE generations SET rating=?,feedback=?,flagged_bad=1 WHERE id=?",
++                        ("ruim", metadata["feedback"], generation_id))
++            con.commit()
++        storage.commit()
++        return {"ok": True, "saved_for_review": True}
++
++    @web.get("/outputs/{filename}")
++    def output(filename: str):
++        if Path(filename).name != filename or not filename.endswith(".png"):
++            raise HTTPException(400, "Nome de arquivo inv├ílido.")
++        file_path = OUTPUT_DIR / filename
++        if not file_path.is_file():
++            raise HTTPException(404, "Imagem n├úo encontrada.")
++        return FileResponse(file_path, media_type="image/png", filename=filename)
++
++    @web.get("/health")
++    def health():
++        return {"status": "ok", "app": "GeraArteIA", "storage": "modal-volume"}
++
++    return web
+diff --git a/web_app.py b/web_app.py
+index 7167701..ca3f302 100644
+--- a/web_app.py
++++ b/web_app.py
+@@ -1,191 +1,430 @@
+ ´╗┐from datetime import datetime
++from html import escape
+ from pathlib import Path
++from uuid import uuid4
+ 
+-from fastapi import FastAPI, HTTPException, Request
+-from fastapi.responses import FileResponse
++from fastapi import FastAPI, Form
++from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
+ from fastapi.staticfiles import StaticFiles
+-from fastapi.templating import Jinja2Templates
+-from pydantic import BaseModel, Field
+ 
+-from app.config import MODEL_PATH, OUTPUTS_DIR
++from app.config import OUTPUTS_DIR
+ from app.generator import GeraArteIA
++from app.prompt_optimizer import PromptOptimizer
+ from app.database import (
+     registrar_geracao,
+     avaliar_geracao,
+-    obter_estatisticas,
+     obter_historico,
++    obter_estatisticas,
++    obter_fila_revisao,
++    concluir_revisao,
++    get_db_connection,
+ )
+ 
++app = FastAPI(title="GeraArteIA - TCC")
++
++BASE_DIR = Path(__file__).resolve().parent
++OUTPUT_DIR = Path(OUTPUTS_DIR).resolve()
++OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
++
++optimizer = PromptOptimizer()
++generator = GeraArteIA()
++
++app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
++
++
++def page(content: str, title: str = "GeraArteIA") -> HTMLResponse:
++    return HTMLResponse(f"""
++    <!DOCTYPE html>
++    <html lang="pt-BR">
++    <head>
++      <meta charset="UTF-8">
++      <meta name="viewport" content="width=device-width, initial-scale=1">
++      <title>{escape(title)} | GeraArteIA</title>
++      <style>
++        body {{ font-family: Arial, sans-serif; max-width: 1050px; margin: 30px auto;
++               padding: 0 18px; background: #f4f6f8; color: #20252b; }}
++        header, section, .card {{ background: white; padding: 22px; border-radius: 12px;
++                                  margin-bottom: 18px; box-shadow: 0 2px 8px #0001; }}
++        h1, h2 {{ color: #174d36; }}
++        nav a, .btn {{ display: inline-block; margin: 5px 8px 5px 0; padding: 10px 14px;
++                       border-radius: 7px; background: #176b48; color: white;
++                       text-decoration: none; border: 0; cursor: pointer; }}
++        input, textarea, select {{ width: 100%; box-sizing: border-box; padding: 11px;
++                                   margin: 6px 0 14px; border: 1px solid #ccd3d8;
++                                   border-radius: 6px; }}
++        label {{ font-weight: bold; }}
++        .grid {{ display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
++                 gap: 14px; }}
++        .muted {{ color: #5b6570; font-size: .92em; }}
++        img {{ max-width: 100%; height: auto; border-radius: 9px; }}
++        .warning {{ color: #9b2c2c; font-weight: bold; }}
++        table {{ border-collapse: collapse; width: 100%; background: white; }}
++        th, td {{ border: 1px solid #ddd; padding: 9px; text-align: left; }}
++      </style>
++    </head>
++    <body>
++      <header>
++        <h1>­ƒÄ¿ GeraArteIA</h1>
++        <p>Gera├º├úo de Imagens por Difus├úo</p>
++        <nav>
++          <a href="/">Gerar imagem</a>
++          <a href="/dashboard">Dashboard</a>
++          <a href="/revisao">Fila de revis├úo</a>
++        </nav>
++        <p class="muted">Autores: Walter Muniz Santos e Luan Jesus Pereira Gomes</p>
++      </header>
++      {content}
++    </body>
++    </html>
++    """)
++
++
++def get_geracao(geracao_id: int):
++    with get_db_connection() as conn:
++        return conn.execute(
++            "SELECT * FROM geracoes WHERE id = ?", (geracao_id,)
++        ).fetchone()
++
++
++@app.get("/", response_class=HTMLResponse)
++def index():
++    content = """
++    <section>
++      <h2>Gerar nova imagem</h2>
++      <p>Descreva a imagem. O sistema otimiza o prompt preservando a ideia original.</p>
++      <div class="grid">
++        <div class="card">
++          <b>Exemplo: cavalo</b>
++          <p>Cavalo galopando em um campo, corpo inteiro e quatro patas vis├¡veis.</p>
++          <button class="btn" type="button"
++            onclick="document.getElementById('prompt').value='Cavalo galopando em um campo, corpo inteiro e quatro patas vis├¡veis'">Usar exemplo</button>
++        </div>
++        <div class="card">
++          <b>Exemplo: girafa</b>
++          <p>Girafa de corpo inteiro na savana africana.</p>
++          <button class="btn" type="button"
++            onclick="document.getElementById('prompt').value='Girafa de corpo inteiro na savana africana'">Usar exemplo</button>
++        </div>
++        <div class="card">
++          <b>Exemplo: ve├¡culo</b>
++          <p>SUV rosa com um la├ºo rosa grande no cap├┤.</p>
++          <button class="btn" type="button"
++            onclick="document.getElementById('prompt').value='SUV rosa com um la├ºo rosa grande no cap├┤'">Usar exemplo</button>
++        </div>
++        <div class="card">
++          <b>Exemplo: tatuagem</b>
++          <p>Desenho de tatuagem de on├ºa-pintada com rosetas bem definidas.</p>
++          <button class="btn" type="button"
++            onclick="document.getElementById('prompt').value='Desenho de tatuagem de on├ºa-pintada com rosetas bem definidas'">Usar exemplo</button>
++        </div>
++        <div class="card">
++          <b>Exemplo: fotografia de produto</b>
++          <p>Fotografia profissional de um frasco de perfume sobre superf├¡cie elegante, ilumina├º├úo de est├║dio e fundo sofisticado.</p>
++          <button class="btn" type="button"
++            onclick="document.getElementById('prompt').value='Fotografia profissional de um frasco de perfume sobre superf├¡cie elegante, ilumina├º├úo de est├║dio e fundo sofisticado'">Usar exemplo</button>
++        </div>
++        <div class="card">
++          <b>Exemplo: ciclista</b>
++          <p>Ciclista pedalando em uma ciclovia urbana, bicicleta inteira vis├¡vel.</p>
++          <button class="btn" type="button"
++            onclick="document.getElementById('prompt').value='Ciclista pedalando em uma ciclovia urbana, bicicleta inteira vis├¡vel'">Usar exemplo</button>
++        </div>
++      </div>
++      <form action="/gerar" method="post">
++        <label for="prompt">Seu prompt</label>
++        <textarea id="prompt" name="prompt" rows="4" required maxlength="1200"
++          placeholder="Descreva a imagem que deseja criar..."></textarea>
++        <label for="steps">Passos de gera├º├úo (1 a 50)</label>
++        <input id="steps" name="steps" type="number" min="1" max="50" value="20" required>
++        <label for="width">Largura</label>
++        <select id="width" name="width">
++          <option value="256">256 px (menor consumo)</option>
++          <option value="384">384 px</option>
++          <option value="512" selected>512 px</option>
++        </select>
++        <label for="height">Altura</label>
++        <select id="height" name="height">
++          <option value="256">256 px (menor consumo)</option>
++          <option value="384">384 px</option>
++          <option value="512" selected>512 px</option>
++        </select>
++        <button class="btn" type="submit">Ô£¿ Gerar com Stable Diffusion</button>
++      </form>
++      <p class="muted">A primeira gera├º├úo pode demorar porque o modelo precisa ser carregado.
++      Em computadores sem GPU compat├¡vel, a gera├º├úo pode ser bastante lenta.</p>
++    </section>
++    """
++    return page(content, "Gerar imagem")
++
++
++@app.post("/gerar", response_class=HTMLResponse)
++def gerar(
++    prompt: str = Form(...),
++    steps: int = Form(20),
++    width: int = Form(512),
++    height: int = Form(512),
++):
++    prompt = prompt.strip()
++
++    if not prompt or len(prompt) > 1200:
++        return page(
++            "<section class=\"warning\">Informe um prompt v├ílido, "
++            "com at├® 1200 caracteres.</section>"
++        )
+ 
+-app = FastAPI(
+-    title="GeraArteIA",
+-    description="Sistema de gera├º├úo de imagens por intelig├¬ncia artificial.",
+-    version="1.1.0",
+-)
+-
+-app.mount("/static", StaticFiles(directory="web/static"), name="static")
+-templates = Jinja2Templates(directory="web/templates")
+-
+-
+-class PedidoImagem(BaseModel):
+-    prompt: str
+-
+-
+-class PedidoAvaliacao(BaseModel):
+-    geracao_id: int = Field(gt=0)
+-    nota: int = Field(ge=0, le=10)
+-
+-
+-gerador = GeraArteIA(MODEL_PATH)
+-modelo_carregado = False
+-
+-progresso_geracao = {
+-    "ativo": False,
+-    "fase": "ocioso",
+-    "percentual": 0,
+-    "etapa": 0,
+-    "total_etapas": 0,
+-}
+-
+-
+-@app.get("/")
+-def inicio(request: Request):
+-    return templates.TemplateResponse(
+-        request=request,
+-        name="index.html",
+-    )
+-
+-
+-@app.get("/api/status")
+-def status():
+-    return {
+-        "sistema": "GeraArteIA",
+-        "modelo": MODEL_PATH,
+-        "modelo_carregado": modelo_carregado,
+-    }
+-
+-
+-@app.get("/api/progresso")
+-def consultar_progresso():
+-    return dict(progresso_geracao)
+-
+-
+-@app.post("/api/gerar")
+-def gerar_imagem(pedido: PedidoImagem):
+-    global modelo_carregado
+-
+-    if progresso_geracao["ativo"]:
+-        raise HTTPException(
+-            status_code=409,
+-            detail="J├í existe uma gera├º├úo em andamento. Aguarde a conclus├úo.",
++    try:
++        if not 1 <= steps <= 50:
++            raise ValueError("Os passos devem estar entre 1 e 50.")
++
++        for nome, valor in (("largura", width), ("altura", height)):
++            if not 256 <= valor <= 768 or valor % 8 != 0:
++                raise ValueError(
++                    f"A {nome} deve estar entre 256 e 768 "
++                    "pixels e ser m├║ltipla de 8."
++                )
++
++        optimized = optimizer.otimizar(prompt)
++
++        try:
++            negative_prompt = optimizer.prompt_negativo()
++        except AttributeError:
++            negative_prompt = ""
++
++        image = generator.generate(
++            prompt=optimized,
++            negative_prompt=negative_prompt,
++            steps=steps,
++            width=width,
++            height=height,
+         )
+ 
+-    prompt = pedido.prompt.strip()
+-    if not prompt:
+-        raise HTTPException(
+-            status_code=400,
+-            detail="Digite uma descri├º├úo para gerar a imagem.",
++        filename = (
++            f"geraarteia_{datetime.now():%Y%m%d_%H%M%S}_"
++            f"{uuid4().hex[:8]}.png"
++        )
++        filepath = OUTPUT_DIR / filename
++        image.save(filepath, format="PNG")
++
++        try:
++            generation_id = registrar_geracao(
++                prompt=prompt,
++                image_path=str(filepath),
++                optimized_prompt=optimized,
++                steps=steps,
++                width=width,
++                height=height,
++            )
++        except Exception:
++            filepath.unlink(missing_ok=True)
++            raise
++
++        content = f"""
++        <section>
++          <h2>Imagem gerada</h2>
++          <img src="/outputs/{escape(filename)}"
++               alt="Imagem gerada pelo Stable Diffusion">
++          <p><b>Prompt original:</b> {escape(prompt)}</p>
++          <p><b>Prompt otimizado:</b> {escape(optimized)}</p>
++          <a class="btn" href="/download/{generation_id}">Baixar PNG</a>
++          <a class="btn" href="/">Gerar outra imagem</a>
++        </section>
++        <section>
++          <h2>Avalie o resultado</h2>
++          <p>A nota e a satisfa├º├úo s├úo avalia├º├Áes independentes.</p>
++          <form action="/avaliar" method="post">
++            <input type="hidden" name="geracao_id" value="{generation_id}">
++            <label for="rating">Nota de 0 a 10</label>
++            <select id="rating" name="rating" required>
++              {''.join(f'<option value="{n}">{n}</option>' for n in range(11))}
++            </select>
++            <label for="satisfaction_pct">Satisfa├º├úo percentual</label>
++            <select id="satisfaction_pct" name="satisfaction_pct" required>
++              <option value="20">20%</option>
++              <option value="40">40%</option>
++              <option value="60">60%</option>
++              <option value="80">80%</option>
++              <option value="100">100%</option>
++            </select>
++            <label for="feedback">Coment├írio (opcional)</label>
++            <textarea id="feedback" name="feedback"
++                      rows="3" maxlength="1000"></textarea>
++            <button class="btn" type="submit">Salvar avalia├º├úo</button>
++          </form>
++        </section>
++        """
++        return page(content, "Resultado da gera├º├úo")
++
++    except ValueError as exc:
++        return page(
++            f'<section class="warning">N├úo foi poss├¡vel gerar: '
++            f'{escape(str(exc))}</section>'
+         )
++    except Exception as exc:
++        print(f"[GeraArteIA] Erro na gera├º├úo: {type(exc).__name__}: {exc}")
++        return page("""
++        <section class="warning">
++          <h2>Erro durante a gera├º├úo</h2>
++          <p>N├úo foi poss├¡vel concluir a gera├º├úo. Consulte o terminal
++          para verificar o erro t├®cnico.</p>
++          <a class="btn" href="/">Voltar</a>
++        </section>
++        """)
++
++@app.get("/download/{geracao_id}")
++def download(geracao_id: int):
++    row = get_geracao(geracao_id)
++    if row is None:
++        return page("<section>Gera├º├úo n├úo encontrada.</section>")
++
++    filepath = Path(row["image_path"]).resolve()
++    if not filepath.is_relative_to(OUTPUT_DIR) or not filepath.is_file():
++        return page("<section>Arquivo de imagem n├úo encontrado.</section>")
++
++    return FileResponse(
++        filepath,
++        media_type="image/png",
++        filename=f"geraarteia_{geracao_id}.png",
++    )
+ 
+-    progresso_geracao.update({
+-        "ativo": True,
+-        "fase": "carregando_modelo" if not modelo_carregado else "preparando",
+-        "percentual": 0,
+-        "etapa": 0,
+-        "total_etapas": 0,
+-    })
+ 
++@app.post("/avaliar", response_class=HTMLResponse)
++def avaliar(
++    geracao_id: int = Form(...),
++    rating: int = Form(...),
++    satisfaction_pct: int = Form(...),
++    feedback: str = Form(""),
++):
+     try:
+-        if not modelo_carregado:
+-            gerador.carregar_modelo()
+-            modelo_carregado = True
+-
+-        data_hora = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+-        nome_arquivo = f"imagem_{data_hora}.png"
+-
+-        progresso_geracao["fase"] = "gerando"
+-
+-        def atualizar_progresso(percentual, etapa, total):
+-            progresso_geracao.update({
+-                "ativo": True,
+-                "fase": "gerando",
+-                "percentual": percentual,
+-                "etapa": etapa,
+-                "total_etapas": total,
+-            })
+-
+-        caminho = gerador.gerar(
+-            prompt=prompt,
+-            nome_arquivo=nome_arquivo,
+-            callback_progresso=atualizar_progresso,
++        resultado = avaliar_geracao(
++            geracao_id, rating, satisfaction_pct, feedback
+         )
+-
+-        geracao_id = registrar_geracao(prompt, caminho.name)
+-
+-        progresso_geracao.update({
+-            "ativo": False,
+-            "fase": "concluido",
+-            "percentual": 100,
+-        })
+-
+-        return {
+-            "sucesso": True,
+-            "id": geracao_id,
+-            "arquivo": caminho.name,
+-            "imagem": f"/api/imagem/{caminho.name}",
+-        }
+-
+-    except HTTPException:
+-        progresso_geracao.update({"ativo": False, "fase": "erro"})
+-        raise
+-    except Exception as erro:
+-        progresso_geracao.update({"ativo": False, "fase": "erro"})
+-        print(f"Erro na gera├º├úo: {erro}")
+-        raise HTTPException(
+-            status_code=500,
+-            detail=str(erro),
++        if resultado["review_required"]:
++            mensagem = "Avalia├º├úo registrada. Caso encaminhado para a fila de revis├úo."
++        else:
++            mensagem = "Avalia├º├úo registrada. Caso n├úo atende aos dois crit├®rios de revis├úo."
++        return page(
++            f'<section><h2>{escape(mensagem)}</h2><a class="btn" href="/dashboard">Ver dashboard</a></section>',
++            "Avalia├º├úo registrada",
+         )
++    except ValueError as exc:
++        return page(f'<section class="warning">{escape(str(exc))}</section>')
+ 
+ 
+-@app.post("/api/avaliar")
+-def avaliar(pedido: PedidoAvaliacao):
++@app.get("/dashboard", response_class=HTMLResponse)
++def dashboard():
++    stats = obter_estatisticas()
++    history = obter_historico(20)
++
++    rows = "".join(
++        "<tr>"
++        f"<td>{r['id']}</td>"
++        f"<td>{escape(r['prompt'][:100])}</td>"
++        f"<td>{r['rating'] if r['rating'] is not None else 'ÔÇö'}</td>"
++        f"<td>{str(r['satisfaction_pct']) + '%' if r['satisfaction_pct'] is not None else 'ÔÇö'}</td>"
++        f"<td>{escape(str(r['review_status'] or ''))}</td>"
++        "</tr>"
++        for r in history
++    ) or "<tr><td colspan='5'>Nenhuma gera├º├úo registrada.</td></tr>"
++
++    distribution = stats["distribuicao_satisfacao"]
++    total_avaliacoes_satisfacao = sum(distribution.values())
++    bars = "".join(
++        f"""<div class="satisfaction-row">
++          <span>{escape(str(pct))}%</span>
++          <div class="satisfaction-track">
++            <div class="satisfaction-fill" style="width:{(count / max(distribution.values(), default=1)) * 100:.1f}%"></div>
++          </div>
++          <b>{count}</b>
++        </div>"""
++        for pct, count in distribution.items()
++    ) or "<p>Ainda n├úo existem avalia├º├Áes.</p>"
++
++    content = f"""
++    <section>
++      <style>
++        .satisfaction-row {{
++          display: grid;
++          grid-template-columns: 55px minmax(80px, 1fr) 40px;
++          align-items: center;
++          gap: 12px;
++          margin: 10px 0;
++        }}
++        .satisfaction-track {{
++          height: 14px;
++          background: #e5e7eb;
++          border-radius: 8px;
++          overflow: hidden;
++        }}
++        .satisfaction-fill {{
++          height: 100%;
++          background: #15966b;
++          border-radius: 8px;
++          min-width: 0;
++        }}
++      </style>
++      <h2>Dashboard</h2>
++      <div class="grid">
++        <div class="card"><h3>Total de gera├º├Áes</h3><p>{stats['total_geradas']}</p></div>
++        <div class="card"><h3>Gera├º├Áes avaliadas</h3><p>{stats['total_avaliadas']}</p></div>
++        <div class="card"><h3>M├®dia das notas</h3><p>{stats['media_avaliacao']}/10</p></div>
++        <div class="card"><h3>Revis├Áes pendentes</h3><p>{stats['revisoes_pendentes']}</p></div>
++      </div>
++      <h3>Distribui├º├úo da satisfa├º├úo</h3>
++      {bars}
++      <h3>Hist├│rico recente</h3>
++      <table>
++        <thead><tr><th>ID</th><th>Prompt</th><th>Nota</th><th>Satisfa├º├úo</th><th>Revis├úo</th></tr></thead>
++        <tbody>{rows}</tbody>
++      </table>
++    </section>
++    """
++    return page(content, "Dashboard")
++
++
++@app.get("/revisao", response_class=HTMLResponse)
++def revisao():
++    items = obter_fila_revisao()
++    if not items:
++        return page("<section><h2>Fila de revis├úo vazia</h2><p>N├úo h├í casos pendentes.</p></section>")
++
++    cards = []
++    for row in items:
++        img = ""
++        filepath = Path(row["image_path"]).resolve()
++        if filepath.is_relative_to(OUTPUT_DIR) and filepath.is_file():
++            img = f'<img src="/outputs/{escape(filepath.name)}" alt="Imagem para revis├úo">'
++
++        cards.append(f"""
++        <div class="card">
++          <h3>Gera├º├úo #{row['id']}</h3>
++          {img}
++          <p><b>Prompt:</b> {escape(row['prompt'])}</p>
++          <p><b>Nota:</b> {row['rating']}/10 |
++          <b>Satisfa├º├úo:</b> {row['satisfaction_pct']}%</p>
++          <p><b>Coment├írio:</b> {escape(row['feedback'] or 'Sem coment├írio')}</p>
++          <form action="/revisao/{row['id']}/concluir" method="post">
++            <button class="btn" type="submit">Marcar revis├úo conclu├¡da</button>
++          </form>
++        </div>
++        """)
++
++    return page("<section><h2>Fila de revis├úo</h2>" + "".join(cards) + "</section>")
++
++
++@app.post("/revisao/{geracao_id}/concluir", response_class=HTMLResponse)
++def revisar_concluir(geracao_id: int):
+     try:
+-        registrada = avaliar_geracao(pedido.geracao_id, pedido.nota)
+-        if not registrada:
+-            raise HTTPException(
+-                status_code=404,
+-                detail="Gera├º├úo n├úo encontrada.",
+-            )
+-        return {"sucesso": True, "estatisticas": obter_estatisticas()}
+-    except HTTPException:
+-        raise
+-    except Exception as erro:
+-        raise HTTPException(status_code=500, detail=str(erro))
++        concluir_revisao(geracao_id)
++        return RedirectResponse("/revisao", status_code=303)
++    except ValueError as exc:
++        return page(f'<section>{escape(str(exc))}</section>')
+ 
+ 
+-@app.get("/api/historico")
+-def historico():
+-    return obter_historico()
++@app.get("/health")
++def health():
++    return {"status": "ok", "app": "GeraArteIA"}
+ 
+ 
+-@app.get("/api/dashboard")
+-def dashboard():
+-    return obter_estatisticas()
+ 
+ 
+-@app.get("/api/imagem/{nome_arquivo}")
+-def imagem(nome_arquivo: str):
+-    nome_seguro = Path(nome_arquivo).name
+-    caminho = OUTPUTS_DIR / nome_seguro
+ 
+-    if not caminho.is_file():
+-        raise HTTPException(
+-            status_code=404,
+-            detail="Imagem n├úo encontrada.",
+-        )
+-
+-    return FileResponse(
+-        path=caminho,
+-        media_type="image/png",
+-        filename=nome_seguro,
+-    )
+
+=== DIFF DAS DEPENDENCIAS ===
+diff --git a/requirements.txt b/requirements.txt
+index cbbb560..84d9ca7 100644
+Binary files a/requirements.txt and b/requirements.txt differ
+
+=== RESUMO DO GIT ===
+ M .gitignore
+ M app/database.py
+ M app/generator.py
+ M app/prompt_optimizer.py
+D  geraarteia.db
+ M modal_app.py
+ M requirements.txt
+ M web_app.py
+?? Atualizar_GeraArteIA_Modal.ps1
+?? Corrigir_GeraArteIA.ps1
+?? Diagnostico_GeraArteIA.zip
+?? adicionar_criadores.py
+?? backups/ajuste_pipeline_20261027_011823/
+?? backups/antes_correcao_web_20261027_011148/
+?? backups/consolidacao_20261027_012016/
+?? backups/correcao_gerador_20261027_011625/
+?? backups/correcao_gerador_20261027_012158/
+?? backups/criadores_20261027_231039/
+?? backups/dashboard_fix_20261027_013051/
+?? backups/dashboard_graficos_20261027_012318/
+?? backups/etapa_implementacao_20261027_011315/
+?? backups/exemplos_iniciais_20261027_012253/
+?? backups/finalizacao_20261027_012409/
+?? backups/generator_completo_20261027_011904/
+?? backups/generator_completo_20261027_011909/
+?? backups/gerador_20261027_012111/
+?? backups/inicializacao_20261027_012128/
+?? backups/layout_modal_20261027_224813/
+?? backups/manutencao_20261027_220131/
+?? backups/manutencao_20261027_220419/
+?? backups/manutencao_20261027_222341/
+?? backups/otimizador_20261027_012053/
+?? backups/pacote_implementacao_20261027_011726/
+?? backups/prompt_optimizer_20261027_011848/
+?? backups/prompt_optimizer_ajuste2_20261027_013334/
+?? backups/prompt_optimizer_ajuste3_20261027_013435/
+?? backups/prompt_optimizer_ajuste_final_20261027_013317/
+?? backups/prompt_optimizer_cavalo_20261027_013453/
+?? backups/prompt_optimizer_cavalo_final_20261027_213254/
+?? backups/prompt_optimizer_cavalo_fix_20261027_013525/
+?? backups/prompt_optimizer_cavalo_fix_20261027_213023/
+?? backups/prompt_optimizer_fix_20261027_013229/
+?? backups/prompt_optimizer_galope_20261027_213312/
+?? backups/seguranca_github_20261027_231516/
+?? backups/web_app_20261027_011401/
+?? backups/web_app_20261027_011409/
+?? backups/web_app_geracao_20261027_012224/
+?? diagnostico_erro.txt
+?? diagnostico_saida.txt
+?? iniciar.ps1
+?? revisao_pre_publicacao.txt
+?? run.py
+?? start_server.py
+
+=== ARQUIVOS NOVOS IMPORTANTES ===
+
+--- iniciar.ps1 ---
+$ErrorActionPreference = "Stop"
+
+Set-Location $PSScriptRoot
+
+$python = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+
+if (-not (Test-Path $python)) {
+    throw "Python do ambiente virtual não encontrado em .venv\Scripts\python.exe"
+}
+
+if (-not (Test-Path (Join-Path $PSScriptRoot "web_app.py"))) {
+    throw "web_app.py não foi encontrado na pasta do projeto."
+}
+
+Write-Host "Iniciando GeraArteIA em http://127.0.0.1:8000" -ForegroundColor Cyan
+Write-Host "Para encerrar, pressione Ctrl+C." -ForegroundColor Yellow
+
+& $python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
+
+--- run.py ---
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import HTMLResponse
+import uvicorn
+from app.database import registrar_geracao, obter_estatisticas
+
+app = FastAPI()
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    stats = obter_estatisticas()
+    return f"""
+    <!DOCTYPE html>
+    <html lang="pt">
+    <head>
+        <meta charset="UTF-8">
+        <title>GeraArteIA - TCC</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; background: #0f172a; color: #fff; text-align: center; padding: 50px; }}
+            .box {{ max-width: 600px; margin: auto; background: #1e293b; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }}
+            input {{ width: 80%; padding: 12px; margin: 10px 0; border-radius: 5px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 16px; }}
+            button {{ background: #0ea5e9; color: white; border: none; padding: 12px 25px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; }}
+            button:hover {{ background: #0284c7; }}
+            .stats {{ margin-top: 20px; color: #38bdf8; font-size: 18px; }}
+        </style>
+    </head>
+    <body>
+        <div class="box">
+            <h1>🎨 GeraArteIA</h1>
+            <p>Trabalho de Conclusão de Curso (TCC)</p>
+            <form action="/gerar" method="POST">
+                <input type="text" name="prompt" placeholder="Digite o prompt da imagem..." required><br>
+                <button type="submit">Gerar Imagem</button>
+            </form>
+            <div class="stats">
+                <p>Total de Imagens Geradas: {stats['total_geradas']} | Média de Notas: {stats['media_avaliacao']}/10</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+@app.post("/gerar", response_class=HTMLResponse)
+def gerar(prompt: str = Form(...)):
+    img_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80"
+    registrar_geracao(prompt, img_url)
+    return f"""
+    <body style="font-family: Arial; background: #0f172a; color: #fff; text-align: center; padding: 50px;">
+        <div style="max-width: 600px; margin: auto; background: #1e293b; padding: 30px; border-radius: 10px;">
+            <h2>✨ Imagem Gerada com Sucesso!</h2>
+            <p><strong>Prompt:</strong> {prompt}</p>
+            <img src="{img_url}" style="max-width: 100%; border-radius: 8px; margin: 20px 0;">
+            <br><a href="/" style="color: #38bdf8; text-decoration: none; font-weight: bold;">⬅ Voltar ao Painel</a>
+        </div>
+    </body>
+    """
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+--- start_server.py ---
+import uvicorn
+from web_app import app
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
+
+--- adicionar_criadores.py ---
+from pathlib import Path
+
+p = Path("modal_app.py")
+s = p.read_text(encoding="utf-8")
+
+alvo = "</section></main>`n<script>"
+if alvo not in s:
+    alvo = "</section></main>\n<script>"
+
+rodape = """</section>
+<footer style="text-align:center;margin:42px auto 0;padding:22px 12px 8px;border-top:1px solid #303955;color:#aab3ce;font-size:13px;line-height:1.8">
+  <div style="font-weight:600;color:#f4f6ff">GeraArteIA</div>
+  <div>Desenvolvido por Walter Muniz Santos e Luan Jesus Pereira Gomes</div>
+  <div>Trabalho de Conclusão de Curso — Geração de Imagens por Difusão</div>
+</footer>
+</main>
+<script>"""
+
+if "Desenvolvido por Walter Muniz Santos e Luan Jesus Pereira Gomes" in s:
+    print("Os nomes dos criadores já estão no arquivo. Nenhuma alteração necessária.")
+elif alvo in s:
+    s = s.replace(alvo, rodape, 1)
+    p.write_text(s, encoding="utf-8")
+    print("Rodapé dos criadores adicionado com sucesso.")
+else:
+    raise SystemExit("Não encontrei o ponto exato para inserir o rodapé. O arquivo não foi alterado.")

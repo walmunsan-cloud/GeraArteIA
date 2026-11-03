@@ -14,3 +14,5 @@ safetensors==0.8.0
 Pillow
 numpy
 python-multipart
+
+sentencepiece>=0.2.0

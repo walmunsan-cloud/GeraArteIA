@@ -1,0 +1,11 @@
+{
+  "id": "9f3c3dd1a3d6400a8eb03d48782c33ba",
+  "prompt": "Um cavalo marrom correndo em um campo verde, corpo inteiro visível, quatro patas e cascos visíveis, crina e cauda naturais, fotografia realista, luz natural.",
+  "created_at": "2026-10-29T00:44:00+00:00",
+  "image_file": "9f3c3dd1a3d6400a8eb03d48782c33ba.png",
+  "rating": 3,
+  "feedback": "gerou 2 cavalos na mesma imagem",
+  "flagged_at": "2026-10-29T00:44:39+00:00",
+  "model": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+  "review_status": "pendente"
+}

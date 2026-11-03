@@ -1,0 +1,173 @@
+﻿from pathlib import Path
+from datetime import datetime
+import shutil
+import os
+import py_compile
+
+root = Path.cwd()
+target = root / "modal_app.py"
+source = target.read_text(encoding="utf-8")
+
+old_gallery_js = """async function loadGallery(){try{const r=await fetch('/api/galeria');const data=await r.json();gallery.innerHTML=data.length?data.map(x=>`<article class="item"><a href="${x.url}" target="_blank" rel="noopener"><img src="${x.url}" loading="lazy" alt="Imagem gerada"></a><div class="meta"><div class="prompt">${esc(x.prompt)}</div><div class="date">${esc(x.created_at)}</div><div class="actions"><a href="${x.url}" target="_blank" rel="noopener">Abrir</a><a href="${x.url}" download>Baixar</a><button class="bad" onclick="evaluateImage('${x.id}')">â˜… Avaliar imagem</button></div></div></article>`).join(''):'<div class="empty">VocÃª ainda nÃ£o gerou imagens. Escreva um prompt acima para comeÃ§ar.</div>'}catch(e){gallery.innerHTML='<div class="empty">NÃ£o foi possÃ­vel carregar a galeria agora.</div>'}}"""
+
+new_gallery_js = """async function loadGallery(){
+ try{
+  const r=await fetch('/api/galeria');
+  const data=await r.json();
+  if(!r.ok)throw new Error(data.detail||'Falha ao carregar galeria');
+  gallery.innerHTML=data.length?data.map(x=>{
+   let correction='';
+   if(x.flagged_bad&&!x.correction_request_id){
+    correction=`<div class="actions"><button class="bad" onclick="requestCorrection('${x.id}')">Solicitar melhoria</button></div>`;
+   }else if(x.correction_status==='disponivel'||x.correction_status==='erro'){
+    correction=`<div class="actions"><button onclick="analyzeCorrection('${x.correction_request_id}')">Analisar e sugerir melhoria (${x.attempts_used||0}/${x.max_attempts||2})</button></div>`;
+   }else if(x.correction_status==='aguardando_aprovacao'&&x.history_id){
+    const a=x.analysis||{};
+    correction=`<div class="correction">
+      <strong>Sugestão de melhoria</strong>
+      <p class="prompt">${esc(a.problemas_identificados||'Análise concluída.')}</p>
+      <p class="hint">${esc(a.justificativa||'Revise o prompt sugerido antes de aprovar.')}</p>
+      <label for="proposal-${x.history_id}">Prompt proposto — você pode editar:</label>
+      <textarea id="proposal-${x.history_id}" maxlength="1200">${esc(x.proposed_prompt||'')}</textarea>
+      <div class="actions">
+       <button onclick="approveCorrection('${x.history_id}')">Aprovar proposta</button>
+       <button class="bad" onclick="rejectCorrection('${x.history_id}')">Rejeitar proposta</button>
+      </div>
+      <div class="hint">Tentativa ${x.attempts_used||0} de ${x.max_attempts||2}</div>
+    </div>`;
+   }else if(x.correction_status==='aprovada'&&x.history_id){
+    correction=`<div class="correction"><strong>Proposta aprovada</strong><div class="actions"><button onclick="generateCorrection('${x.history_id}')">Gerar imagem corrigida</button></div></div>`;
+   }else if(x.correction_status==='analisando'){
+    correction='<p class="hint">Análise em andamento...</p>';
+   }else if(x.correction_status==='gerando'){
+    correction='<p class="hint">Gerando imagem corrigida...</p>';
+   }else if(x.correction_status==='concluida'){
+    correction='<p class="hint">Melhoria concluída. A nova imagem aparece na galeria.</p>';
+   }else if(x.correction_status==='limite_atingido'){
+    correction='<p class="hint">Limite de duas análises atingido.</p>';
+   }
+   return `<article class="item">
+    <a href="${x.url}" target="_blank" rel="noopener"><img src="${x.url}" loading="lazy" alt="Imagem gerada"></a>
+    <div class="meta">
+     <div class="prompt">${esc(x.prompt)}</div>
+     <div class="date">${esc(x.created_at)}</div>
+     <div class="actions">
+      <a href="${x.url}" target="_blank" rel="noopener">Abrir</a>
+      <a href="${x.url}" download>Baixar</a>
+      <button class="bad" onclick="evaluateImage('${x.id}')">â˜… Avaliar imagem</button>
+     </div>
+     ${correction}
+    </div>
+   </article>`;
+  }).join(''):'<div class="empty">VocÃª ainda nÃ£o gerou imagens. Escreva um prompt acima para comeÃ§ar.</div>';
+ }catch(e){
+  gallery.innerHTML='<div class="empty">NÃ£o foi possÃ­vel carregar a galeria agora.</div>';
+ }
+}
+
+async function correctionPost(url,payload={}){
+ const r=await fetch(url,{
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body:JSON.stringify(payload)
+ });
+ const data=await r.json();
+ if(!r.ok)throw new Error(data.detail||'NÃ£o foi possível concluir a operação.');
+ return data;
+}
+
+async function requestCorrection(id){
+ if(!confirm('Deseja solicitar uma melhoria para esta imagem?'))return;
+ try{
+  await correctionPost('/api/autocorrecao/'+encodeURIComponent(id)+'/solicitar');
+  alert('Solicitação criada. Agora você pode pedir a análise da IA.');
+  await loadGallery();
+ }catch(e){alert(e.message)}
+}
+
+async function analyzeCorrection(id){
+ if(!confirm('A análise usará a IA e consumirá uma das duas tentativas disponíveis. Deseja continuar?'))return;
+ try{
+  const data=await correctionPost('/api/autocorrecao/'+encodeURIComponent(id)+'/analisar');
+  const a=data.analysis||{};
+  alert('Análise concluída.\\n\\nProblemas: '+(a.problemas_identificados||'Não informado')+'\\n\\nJustificativa: '+(a.justificativa||'Não informada')+'\\n\\nRevise o prompt na galeria e aprove ou rejeite a proposta.');
+  await loadGallery();
+ }catch(e){alert(e.message)}
+}
+
+async function approveCorrection(id){
+ const field=document.getElementById('proposal-'+id);
+ const edited_prompt=field?field.value.trim():'';
+ if(!edited_prompt){alert('O prompt não pode ficar vazio.');return}
+ if(!confirm('Aprovar esta proposta? A imagem só será gerada quando você clicar em Gerar imagem corrigida.'))return;
+ try{
+  await correctionPost('/api/autocorrecao/'+encodeURIComponent(id)+'/aprovar',{edited_prompt});
+  alert('Proposta aprovada. Você já pode gerar a imagem corrigida.');
+  await loadGallery();
+ }catch(e){alert(e.message)}
+}
+
+async function rejectCorrection(id){
+ if(!confirm('Deseja rejeitar esta proposta?'))return;
+ try{
+  await correctionPost('/api/autocorrecao/'+encodeURIComponent(id)+'/rejeitar');
+  alert('Proposta rejeitada.');
+  await loadGallery();
+ }catch(e){alert(e.message)}
+}
+
+async function generateCorrection(id){
+ if(!confirm('Gerar uma nova imagem usando o prompt aprovado?'))return;
+ try{
+  const data=await correctionPost('/api/autocorrecao/'+encodeURIComponent(id)+'/gerar');
+  alert('Imagem corrigida gerada com sucesso.');
+  await loadGallery();
+  const image=document.querySelector(`a[href="${data.url}"]`);
+  if(image)image.scrollIntoView({behavior:'smooth',block:'center'});
+ }catch(e){alert(e.message)}
+}"""
+
+style_anchor = ".actions{display:flex;gap:8px;flex-wrap:wrap}"
+new_style = style_anchor + ".correction{margin-top:13px;padding:12px;border:1px solid #59658d;border-radius:10px;background:#10162a}.correction strong{display:block;margin-bottom:8px}.correction label{margin-top:10px;font-size:12px}.correction textarea{min-height:100px;margin:7px 0 10px;font-size:13px}.correction p{margin:7px 0}"
+
+checks = [
+    ("funcao loadGallery", old_gallery_js, 1),
+    ("estilo actions", style_anchor, 1),
+]
+
+for label, anchor, expected in checks:
+    count = source.count(anchor)
+    if count != expected:
+        raise SystemExit(
+            f"ERRO: {label}: esperado {expected} trecho(s), encontrado(s) {count}. "
+            "Nenhuma alteracao foi gravada."
+        )
+
+if "async function requestCorrection(id)" in source:
+    raise SystemExit("ERRO: funcoes de autocorrecao ja existem.")
+
+updated = source.replace(old_gallery_js, new_gallery_js, 1)
+updated = updated.replace(style_anchor, new_style, 1)
+
+backup_dir = root / "backups"
+backup_dir.mkdir(exist_ok=True)
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup = backup_dir / f"modal_app_antes_interface_autocorrecao_{stamp}.py"
+temp = target.with_name(target.name + ".tmp")
+
+shutil.copy2(target, backup)
+
+try:
+    temp.write_text(updated, encoding="utf-8", newline="")
+    os.replace(temp, target)
+    py_compile.compile(str(target), doraise=True)
+except Exception:
+    if temp.exists():
+        temp.unlink()
+    shutil.copy2(backup, target)
+    raise
+
+print("INTERFACE DE AUTOCORRECAO INSERIDA; PY_COMPILE OK")
+print(f"Backup: {backup}")
+print(f"Arquivo: {target}")
+print(f"Tamanho: {target.stat().st_size} bytes")

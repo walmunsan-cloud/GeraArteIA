@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+jinja2
+pydantic
+
+torch
+torchvision
+
+diffusers==0.39.0
+transformers>=4.41,<5.0
+accelerate==1.14.0
+safetensors==0.8.0
+
+Pillow
+numpy
+python-multipart

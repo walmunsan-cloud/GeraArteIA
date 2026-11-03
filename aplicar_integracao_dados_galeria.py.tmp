@@ -1,0 +1,129 @@
+﻿from pathlib import Path
+from datetime import datetime
+import shutil
+import os
+import py_compile
+
+root = Path.cwd()
+target = root / "modal_app.py"
+source = target.read_text(encoding="utf-8")
+
+# 1. Corrige a consulta da rota de regeneracao.
+old_regen = '''SELECT h.id, h.request_id, h.approved_prompt,
+                          cr.status AS request_status,
+                          cr.original_generation_id'''
+
+new_regen = '''SELECT h.id, h.request_id, h.status, h.approved_prompt,
+                          cr.status AS request_status,
+                          cr.original_generation_id'''
+
+# 2. Amplia a consulta da galeria para incluir a solicitacao e a ultima proposta.
+old_gallery = '''            rows = con.execute(
+                """SELECT * FROM generations
+                   WHERE visitor_id = ?
+                   ORDER BY created_at DESC LIMIT 10""",
+                (visitor_id,)
+            ).fetchall()
+        return [{"id": r["id"], "prompt": r["prompt"], "created_at": r["created_at"],
+                 "url": "/outputs/" + Path(r["image_path"]).name, "flagged_bad": bool(r["flagged_bad"])} for r in rows]'''
+
+new_gallery = '''            rows = con.execute(
+                """SELECT g.*,
+                          cr.id AS correction_request_id,
+                          cr.status AS correction_status,
+                          cr.attempts_used,
+                          cr.max_attempts,
+                          h.id AS history_id,
+                          h.status AS history_status,
+                          h.proposed_prompt,
+                          h.analysis_json,
+                          h.approved_prompt
+                   FROM generations g
+                   LEFT JOIN correction_requests cr
+                     ON cr.id = (
+                         SELECT cr2.id
+                         FROM correction_requests cr2
+                         WHERE cr2.original_generation_id = g.id
+                           AND cr2.visitor_id = ?
+                         ORDER BY cr2.created_at DESC
+                         LIMIT 1
+                     )
+                   LEFT JOIN correction_history h
+                     ON h.id = (
+                         SELECT h2.id
+                         FROM correction_history h2
+                         WHERE h2.request_id = cr.id
+                         ORDER BY h2.attempt_number DESC
+                         LIMIT 1
+                     )
+                   WHERE g.visitor_id = ?
+                   ORDER BY g.created_at DESC LIMIT 10""",
+                (visitor_id, visitor_id)
+            ).fetchall()
+
+        result = []
+        for r in rows:
+            analysis = None
+            if r["analysis_json"]:
+                try:
+                    analysis = json.loads(r["analysis_json"])
+                except (TypeError, ValueError):
+                    analysis = None
+
+            result.append({
+                "id": r["id"],
+                "prompt": r["prompt"],
+                "created_at": r["created_at"],
+                "url": "/outputs/" + Path(r["image_path"]).name,
+                "flagged_bad": bool(r["flagged_bad"]),
+                "correction_request_id": r["correction_request_id"],
+                "correction_status": r["correction_status"],
+                "attempts_used": r["attempts_used"],
+                "max_attempts": r["max_attempts"],
+                "history_id": r["history_id"],
+                "history_status": r["history_status"],
+                "proposed_prompt": r["proposed_prompt"],
+                "analysis": analysis,
+                "approved_prompt": r["approved_prompt"]
+            })
+
+        return result'''
+
+checks = [
+    ("consulta regeneracao", old_regen, 1),
+    ("consulta galeria", old_gallery, 1),
+]
+
+for label, anchor, expected in checks:
+    count = source.count(anchor)
+    if count != expected:
+        raise SystemExit(
+            f"ERRO: {label}: esperado {expected} trecho(s), encontrado(s) {count}. "
+            "Nenhuma alteracao foi gravada."
+        )
+
+updated = source.replace(old_regen, new_regen, 1)
+updated = updated.replace(old_gallery, new_gallery, 1)
+
+backup_dir = root / "backups"
+backup_dir.mkdir(exist_ok=True)
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup = backup_dir / f"modal_app_antes_integracao_dados_galeria_{stamp}.py"
+temp = target.with_name(target.name + ".tmp")
+
+shutil.copy2(target, backup)
+
+try:
+    temp.write_text(updated, encoding="utf-8", newline="")
+    os.replace(temp, target)
+    py_compile.compile(str(target), doraise=True)
+except Exception:
+    if temp.exists():
+        temp.unlink()
+    shutil.copy2(backup, target)
+    raise
+
+print("CORRECAO DA REGENERACAO E DADOS DA GALERIA INSERIDOS; PY_COMPILE OK")
+print(f"Backup: {backup}")
+print(f"Arquivo: {target}")
+print(f"Tamanho: {target.stat().st_size} bytes")

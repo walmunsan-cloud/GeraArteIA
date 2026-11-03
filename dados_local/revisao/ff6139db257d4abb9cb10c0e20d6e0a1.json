@@ -1,0 +1,12 @@
+{
+  "id": "ff6139db257d4abb9cb10c0e20d6e0a1",
+  "prompt": "giraffa",
+  "created_at": "2026-11-02T14:31:09+00:00",
+  "image_file": "ff6139db257d4abb9cb10c0e20d6e0a1.png",
+  "rating": 3,
+  "satisfaction_pct": 20,
+  "feedback": "ficou desconfigurada",
+  "flagged_at": "2026-11-02T14:31:37+00:00",
+  "model": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+  "review_status": "pendente"
+}

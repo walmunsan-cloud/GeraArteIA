@@ -1,0 +1,183 @@
+﻿from pathlib import Path
+from datetime import datetime
+import shutil
+import os
+import py_compile
+
+root = Path.cwd()
+target = root / "modal_app.py"
+source = target.read_text(encoding="utf-8")
+
+anchor = '''    @web.get("/outputs/{filename}")
+    def output(filename: str, request: Request):
+'''
+
+routes = '''    @web.post("/api/autocorrecao/{history_id}/aprovar")
+    def aprovar_autocorrecao(
+        history_id: str, payload: dict, request: Request
+    ):
+        visitor_id = request.state.visitor_id
+        edited_prompt = str(
+            payload.get("edited_prompt") or ""
+        ).strip()
+
+        with sqlite3.connect(DB_PATH, timeout=30) as con:
+            con.row_factory = sqlite3.Row
+            con.execute("BEGIN IMMEDIATE")
+
+            item = con.execute(
+                """SELECT h.id, h.request_id, h.status,
+                          h.proposed_prompt, cr.status AS request_status
+                   FROM correction_history h
+                   JOIN correction_requests cr
+                     ON cr.id = h.request_id
+                   WHERE h.id = ? AND cr.visitor_id = ?""",
+                (history_id, visitor_id)
+            ).fetchone()
+
+            if item is None:
+                raise HTTPException(404, "Proposta não encontrada.")
+
+            if item["status"] != "proposta" or (
+                item["request_status"] != "aguardando_aprovacao"
+            ):
+                raise HTTPException(
+                    409, "Esta proposta não está aguardando aprovação."
+                )
+
+            approved_prompt = edited_prompt or item["proposed_prompt"]
+
+            if not approved_prompt:
+                raise HTTPException(400, "A proposta não possui prompt válido.")
+
+            if len(approved_prompt) > 1200:
+                raise HTTPException(
+                    400, "O prompt aprovado deve ter até 1.200 caracteres."
+                )
+
+            con.execute(
+                """UPDATE correction_history
+                   SET status='aprovada', approved_prompt=?,
+                       updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status='proposta'
+                     AND EXISTS (
+                         SELECT 1 FROM correction_requests
+                         WHERE id=? AND visitor_id=?
+                     )""",
+                (approved_prompt, history_id, item["request_id"], visitor_id)
+            )
+
+            con.execute(
+                """UPDATE correction_requests
+                   SET status='aprovada', updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND visitor_id=?
+                     AND status='aguardando_aprovacao'""",
+                (item["request_id"], visitor_id)
+            )
+            con.commit()
+
+        return {
+            "ok": True,
+            "status": "aprovada",
+            "history_id": history_id,
+            "request_id": item["request_id"],
+            "approved_prompt": approved_prompt
+        }
+
+    @web.post("/api/autocorrecao/{history_id}/rejeitar")
+    def rejeitar_autocorrecao(history_id: str, request: Request):
+        visitor_id = request.state.visitor_id
+
+        with sqlite3.connect(DB_PATH, timeout=30) as con:
+            con.row_factory = sqlite3.Row
+            con.execute("BEGIN IMMEDIATE")
+
+            item = con.execute(
+                """SELECT h.id, h.request_id, h.status,
+                          cr.status AS request_status,
+                          cr.attempts_used
+                   FROM correction_history h
+                   JOIN correction_requests cr
+                     ON cr.id = h.request_id
+                   WHERE h.id = ? AND cr.visitor_id = ?""",
+                (history_id, visitor_id)
+            ).fetchone()
+
+            if item is None:
+                raise HTTPException(404, "Proposta não encontrada.")
+
+            if item["status"] != "proposta" or (
+                item["request_status"] != "aguardando_aprovacao"
+            ):
+                raise HTTPException(
+                    409, "Esta proposta não pode mais ser rejeitada."
+                )
+
+            next_status = (
+                "limite_atingido"
+                if item["attempts_used"] >= 2
+                else "disponivel"
+            )
+
+            con.execute(
+                """UPDATE correction_history
+                   SET status='rejeitada',
+                       updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status='proposta'""",
+                (history_id,)
+            )
+
+            con.execute(
+                """UPDATE correction_requests
+                   SET status=?, updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND visitor_id=?
+                     AND status='aguardando_aprovacao'""",
+                (next_status, item["request_id"], visitor_id)
+            )
+            con.commit()
+
+        return {
+            "ok": True,
+            "status": "rejeitada",
+            "request_status": next_status,
+            "history_id": history_id,
+            "request_id": item["request_id"],
+            "attempts_used": item["attempts_used"],
+            "max_attempts": 2
+        }
+
+''' + anchor
+
+if source.count(anchor) != 1:
+    raise SystemExit("ERRO: ponto de insercao nao encontrado uma unica vez.")
+
+if "/api/autocorrecao/{history_id}/aprovar" in source:
+    raise SystemExit("ERRO: rota de aprovacao ja existe.")
+
+if "/api/autocorrecao/{history_id}/rejeitar" in source:
+    raise SystemExit("ERRO: rota de rejeicao ja existe.")
+
+updated = source.replace(anchor, routes, 1)
+
+backup_dir = root / "backups"
+backup_dir.mkdir(exist_ok=True)
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup = backup_dir / f"modal_app_antes_rotas_aprovacao_{stamp}.py"
+temp = target.with_name(target.name + ".tmp")
+
+shutil.copy2(target, backup)
+
+try:
+    temp.write_text(updated, encoding="utf-8", newline="")
+    os.replace(temp, target)
+    py_compile.compile(str(target), doraise=True)
+except Exception:
+    if temp.exists():
+        temp.unlink()
+    shutil.copy2(backup, target)
+    raise
+
+print("ROTAS DE APROVACAO E REJEICAO INSERIDAS; PY_COMPILE OK")
+print(f"Backup: {backup}")
+print(f"Arquivo: {target}")
+print(f"Tamanho: {target.stat().st_size} bytes")

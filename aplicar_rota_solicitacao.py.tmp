@@ -1,0 +1,112 @@
+﻿from pathlib import Path
+from datetime import datetime
+import shutil
+import os
+import py_compile
+
+root = Path.cwd()
+target = root / "modal_app.py"
+source = target.read_text(encoding="utf-8")
+
+anchor = '''    @web.get("/outputs/{filename}")
+    def output(filename: str, request: Request):
+'''
+
+route = '''    @web.post("/api/autocorrecao/{generation_id}/solicitar")
+    def solicitar_autocorrecao(generation_id: str, request: Request):
+        visitor_id = request.state.visitor_id
+
+        with sqlite3.connect(DB_PATH) as con:
+            con.row_factory = sqlite3.Row
+
+            generation = con.execute(
+                """SELECT id, prompt, flagged_bad
+                   FROM generations
+                   WHERE id = ? AND visitor_id = ?""",
+                (generation_id, visitor_id)
+            ).fetchone()
+
+            if generation is None:
+                raise HTTPException(404, "Geração não encontrada.")
+
+            if not generation["flagged_bad"]:
+                raise HTTPException(
+                    400,
+                    "A imagem precisa ter uma avaliação negativa para solicitar melhoria."
+                )
+
+            existing = con.execute(
+                """SELECT id, status, attempts_used
+                   FROM correction_requests
+                   WHERE original_generation_id = ?
+                     AND visitor_id = ?
+                     AND status IN (
+                         'disponivel', 'analisando',
+                         'aguardando_aprovacao', 'aprovada', 'gerando'
+                     )
+                   ORDER BY created_at DESC
+                   LIMIT 1""",
+                (generation_id, visitor_id)
+            ).fetchone()
+
+            if existing is not None:
+                return {
+                    "ok": True,
+                    "request_id": existing["id"],
+                    "status": existing["status"],
+                    "attempts_used": existing["attempts_used"],
+                    "existing": True
+                }
+
+            request_id = uuid4().hex
+
+            con.execute(
+                """INSERT INTO correction_requests
+                   (id, visitor_id, original_generation_id, status,
+                    attempts_used, max_attempts)
+                   VALUES (?, ?, ?, 'disponivel', 0, 2)""",
+                (request_id, visitor_id, generation_id)
+            )
+            con.commit()
+
+        return {
+            "ok": True,
+            "request_id": request_id,
+            "status": "disponivel",
+            "attempts_used": 0,
+            "max_attempts": 2,
+            "existing": False
+        }
+
+''' + anchor
+
+if source.count(anchor) != 1:
+    raise SystemExit("ERRO: rota output nao encontrada uma unica vez.")
+
+if "/api/autocorrecao/{generation_id}/solicitar" in source:
+    raise SystemExit("ERRO: rota de solicitacao ja existe.")
+
+updated = source.replace(anchor, route, 1)
+
+backup_dir = root / "backups"
+backup_dir.mkdir(exist_ok=True)
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup = backup_dir / f"modal_app_antes_rota_solicitacao_{stamp}.py"
+temp = target.with_name(target.name + ".tmp")
+
+shutil.copy2(target, backup)
+
+try:
+    temp.write_text(updated, encoding="utf-8", newline="")
+    os.replace(temp, target)
+    py_compile.compile(str(target), doraise=True)
+except Exception:
+    if temp.exists():
+        temp.unlink()
+    shutil.copy2(backup, target)
+    raise
+
+print("ROTA DE SOLICITACAO INSERIDA; PY_COMPILE OK")
+print(f"Backup: {backup}")
+print(f"Arquivo: {target}")
+print(f"Tamanho: {target.stat().st_size} bytes")

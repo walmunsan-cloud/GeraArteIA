@@ -1,0 +1,12 @@
+{
+  "id": "32ce5f22fa8f4d1d94fce6c05258316a",
+  "prompt": "cachorro",
+  "created_at": "2026-11-03T00:27:25+00:00",
+  "image_file": "32ce5f22fa8f4d1d94fce6c05258316a.png",
+  "rating": 3,
+  "satisfaction_pct": 20,
+  "feedback": "ficou desconfigurado",
+  "flagged_at": "2026-11-03T00:31:37+00:00",
+  "model": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+  "review_status": "pendente"
+}

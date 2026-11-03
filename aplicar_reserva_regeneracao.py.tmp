@@ -1,0 +1,80 @@
+﻿from pathlib import Path
+from datetime import datetime
+import shutil
+import os
+import py_compile
+
+root = Path.cwd()
+target = root / "modal_app.py"
+source = target.read_text(encoding="utf-8")
+
+old = '''            con.execute(
+                """UPDATE correction_history
+                   SET status='gerando', updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status='aprovada'""",
+                (history_id,)
+            )
+            con.execute(
+                """UPDATE correction_requests
+                   SET status='gerando', updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND visitor_id=? AND status='aprovada'""",
+                (item["request_id"], visitor_id)
+            )
+            con.commit()'''
+
+new = '''            history_update = con.execute(
+                """UPDATE correction_history
+                   SET status='gerando', updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND request_id=? AND status='aprovada'""",
+                (history_id, item["request_id"])
+            )
+
+            if history_update.rowcount != 1:
+                raise HTTPException(
+                    409, "A proposta não está mais disponível para geração."
+                )
+
+            request_update = con.execute(
+                """UPDATE correction_requests
+                   SET status='gerando', updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND visitor_id=? AND status='aprovada'""",
+                (item["request_id"], visitor_id)
+            )
+
+            if request_update.rowcount != 1:
+                raise HTTPException(
+                    409, "A solicitação não está mais disponível para geração."
+                )
+
+            con.commit()'''
+
+if source.count(old) != 1:
+    raise SystemExit(
+        "ERRO: trecho de reserva da regeneracao nao encontrado exatamente uma vez. "
+        "Nenhuma alteracao foi gravada."
+    )
+
+updated = source.replace(old, new, 1)
+
+backup_dir = root / "backups"
+backup_dir.mkdir(exist_ok=True)
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup = backup_dir / f"modal_app_antes_reserva_regeneracao_{stamp}.py"
+temp = target.with_name(target.name + ".tmp")
+
+shutil.copy2(target, backup)
+
+try:
+    temp.write_text(updated, encoding="utf-8", newline="")
+    os.replace(temp, target)
+    py_compile.compile(str(target), doraise=True)
+except Exception:
+    if temp.exists():
+        temp.unlink()
+    shutil.copy2(backup, target)
+    raise
+
+print("RESERVA DA REGENERACAO PROTEGIDA; PY_COMPILE OK")
+print(f"Backup: {backup}")
+print(f"Arquivo: {target}")
+print(f"Tamanho: {target.stat().st_size} bytes")

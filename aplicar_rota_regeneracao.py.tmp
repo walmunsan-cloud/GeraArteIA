@@ -1,0 +1,200 @@
+﻿from pathlib import Path
+from datetime import datetime
+import shutil
+import os
+import py_compile
+
+root = Path.cwd()
+target = root / "modal_app.py"
+source = target.read_text(encoding="utf-8")
+
+anchor = '''    @web.post("/api/avaliar/{generation_id}")
+    def rate(generation_id: str, payload: dict, request: Request):
+'''
+
+route = '''    @web.post("/api/autocorrecao/{history_id}/gerar")
+    def gerar_autocorrecao(history_id: str, request: Request):
+        visitor_id = request.state.visitor_id
+
+        # Reserva a proposta aprovada para impedir geracoes simultaneas.
+        with sqlite3.connect(DB_PATH, timeout=30) as con:
+            con.row_factory = sqlite3.Row
+            con.execute("BEGIN IMMEDIATE")
+
+            item = con.execute(
+                """SELECT h.id, h.request_id, h.approved_prompt,
+                          cr.status AS request_status,
+                          cr.original_generation_id
+                   FROM correction_history h
+                   JOIN correction_requests cr
+                     ON cr.id = h.request_id
+                   WHERE h.id = ?
+                     AND cr.visitor_id = ?""",
+                (history_id, visitor_id)
+            ).fetchone()
+
+            if item is None:
+                raise HTTPException(404, "Proposta não encontrada.")
+
+            if item["status"] != "aprovada" or (
+                item["request_status"] != "aprovada"
+            ):
+                raise HTTPException(
+                    409, "A proposta precisa estar aprovada para gerar."
+                )
+
+            approved_prompt = str(item["approved_prompt"] or "").strip()
+            if not approved_prompt or len(approved_prompt) > 1200:
+                raise HTTPException(400, "Prompt aprovado inválido.")
+
+            con.execute(
+                """UPDATE correction_history
+                   SET status='gerando', updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status='aprovada'""",
+                (history_id,)
+            )
+            con.execute(
+                """UPDATE correction_requests
+                   SET status='gerando', updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND visitor_id=? AND status='aprovada'""",
+                (item["request_id"], visitor_id)
+            )
+            con.commit()
+
+            request_id = item["request_id"]
+
+        generation_id = uuid4().hex
+        filename = f"{generation_id}.png"
+        target_path = OUTPUT_DIR / filename
+
+        try:
+            prompt_final = PromptOptimizer.otimizar(approved_prompt)
+            negativo = PromptOptimizer.prompt_negativo()
+            pipe = get_pipe()
+
+            with torch.inference_mode():
+                result = pipe(
+                    prompt=prompt_final,
+                    negative_prompt=negativo,
+                    num_inference_steps=20,
+                    width=512,
+                    height=512,
+                )
+
+            image = result.images[0]
+            image.save(target_path, format="PNG")
+            created = datetime.now(timezone.utc).isoformat(
+                timespec="seconds"
+            )
+
+            with sqlite3.connect(DB_PATH, timeout=30) as con:
+                con.execute(
+                    """INSERT INTO generations
+                       (id, prompt, image_path, created_at, visitor_id)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        generation_id, approved_prompt,
+                        str(target_path), created, visitor_id
+                    )
+                )
+
+                con.execute(
+                    """UPDATE correction_history
+                       SET status='gerada', result_generation_id=?,
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND request_id=? AND status='gerando'
+                         AND EXISTS (
+                             SELECT 1 FROM correction_requests
+                             WHERE id=? AND visitor_id=?
+                         )""",
+                    (
+                        generation_id, history_id, request_id,
+                        request_id, visitor_id
+                    )
+                )
+
+                con.execute(
+                    """UPDATE correction_requests
+                       SET status='concluida',
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND visitor_id=? AND status='gerando'""",
+                    (request_id, visitor_id)
+                )
+                con.commit()
+
+            storage.commit()
+
+            return {
+                "ok": True,
+                "generation_id": generation_id,
+                "url": "/outputs/" + filename,
+                "history_id": history_id,
+                "status": "concluida"
+            }
+
+        except Exception as exc:
+            print(
+                "[GeraArteIA] regeneracao falhou: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+            try:
+                target_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+            with sqlite3.connect(DB_PATH, timeout=30) as con:
+                con.execute(
+                    """UPDATE correction_history
+                       SET status='aprovada',
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND request_id=? AND status='gerando'""",
+                    (history_id, request_id)
+                )
+                con.execute(
+                    """UPDATE correction_requests
+                       SET status='aprovada',
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND visitor_id=? AND status='gerando'""",
+                    (request_id, visitor_id)
+                )
+                con.commit()
+
+            raise HTTPException(
+                500,
+                "Não foi possível gerar a imagem corrigida. "
+                "A proposta continua aprovada e pode ser tentada novamente."
+            ) from exc
+
+''' + anchor
+
+if source.count(anchor) != 1:
+    raise SystemExit("ERRO: ponto de insercao da rota rate nao encontrado.")
+
+if "/api/autocorrecao/{history_id}/gerar" in source:
+    raise SystemExit("ERRO: rota de regeneracao ja existe.")
+
+updated = source.replace(anchor, route, 1)
+
+backup_dir = root / "backups"
+backup_dir.mkdir(exist_ok=True)
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup = backup_dir / f"modal_app_antes_rota_regeneracao_{stamp}.py"
+temp = target.with_name(target.name + ".tmp")
+
+shutil.copy2(target, backup)
+
+try:
+    temp.write_text(updated, encoding="utf-8", newline="")
+    os.replace(temp, target)
+    py_compile.compile(str(target), doraise=True)
+except Exception:
+    if temp.exists():
+        temp.unlink()
+    shutil.copy2(backup, target)
+    raise
+
+print("ROTA DE REGENERACAO INSERIDA; PY_COMPILE OK")
+print(f"Backup: {backup}")
+print(f"Arquivo: {target}")
+print(f"Tamanho: {target.stat().st_size} bytes")

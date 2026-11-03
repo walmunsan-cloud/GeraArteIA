@@ -1,0 +1,74 @@
+﻿[
+  {
+    "app_id": "ap-fk2rLAa8YRa9BSZR6cKdGp",
+    "description": "geraarteia-teste-tradutor",
+    "state": "stopped",
+    "tasks": "0",
+    "created_at": "2026-11-02 16:45:26-03:00",
+    "stopped_at": "2026-11-02 16:47:51-03:00"
+  },
+  {
+    "app_id": "ap-4XZZ74mDKVL3LZw1Zm13og",
+    "description": "geraarteia-tcc-asgi",
+    "state": "deployed",
+    "tasks": "0",
+    "created_at": "2026-10-27 00:43:14-03:00",
+    "stopped_at": null
+  },
+  {
+    "app_id": "ap-FR72DxpZYeutdAQTDmdgQ4",
+    "description": "geraarteia-tcc-sucesso",
+    "state": "deployed",
+    "tasks": "0",
+    "created_at": "2026-10-27 00:42:34-03:00",
+    "stopped_at": null
+  },
+  {
+    "app_id": "ap-cvfYofbNGkNUw5MDN2qKZX",
+    "description": "geraarteia-tcc-final",
+    "state": "deployed",
+    "tasks": "0",
+    "created_at": "2026-10-27 00:40:08-03:00",
+    "stopped_at": null
+  },
+  {
+    "app_id": "ap-5eiHZTjx4fnsUvkHxkAD1A",
+    "description": "geraarteia-tcc",
+    "state": "deployed",
+    "tasks": "0",
+    "created_at": "2026-10-27 00:38:52-03:00",
+    "stopped_at": null
+  },
+  {
+    "app_id": "ap-MlEIzA9jTLOG1fgxhUX5f4",
+    "description": "geraarteia-web-v2",
+    "state": "deployed",
+    "tasks": "0",
+    "created_at": "2026-10-27 00:31:55-03:00",
+    "stopped_at": null
+  },
+  {
+    "app_id": "ap-K20olSjZ1Vm2Im8BeC6kOC",
+    "description": "geraarteia-web",
+    "state": "deployed",
+    "tasks": "0",
+    "created_at": "2026-10-27 00:00:15-03:00",
+    "stopped_at": null
+  },
+  {
+    "app_id": "ap-bnob3atjQv7GNDLjEETkDX",
+    "description": "gera-arte-ia",
+    "state": "deployed",
+    "tasks": "0",
+    "created_at": "2026-10-26 23:55:38-03:00",
+    "stopped_at": null
+  },
+  {
+    "app_id": "ap-YT6rwdavZUvqzde6pBzkBR",
+    "description": "geraarteia",
+    "state": "deployed",
+    "tasks": "0",
+    "created_at": "2026-09-04 19:14:12-03:00",
+    "stopped_at": null
+  }
+]

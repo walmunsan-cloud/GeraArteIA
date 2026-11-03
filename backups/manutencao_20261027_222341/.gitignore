@@ -1,0 +1,33 @@
+﻿# Ambiente virtual e caches Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Segredos e configurações locais
+.env
+.env.*
+!.env.example
+
+# Arquivos temporários
+*.log
+.DS_Store
+Thumbs.db
+
+# Imagens geradas localmente
+outputs/*
+!outputs/.gitkeep
+generated/*
+!generated/.gitkeep
+
+# Modelos de IA grandes
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+
+# Configurações locais de ferramentas
+.modal/

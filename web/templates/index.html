@@ -160,7 +160,123 @@
 
         textarea::placeholder { color: #7e86a4; }
 
-        .counter {
+        /* Guia e sugestões de aprimoramento de prompts */
+.prompt-guide {
+    margin: 14px 0;
+    padding: 14px 16px;
+    border: 1px solid var(--border, #303750);
+    border-radius: 14px;
+    background: rgba(125, 145, 210, 0.06);
+}
+.prompt-guide-title {
+    margin: 0 0 8px;
+    font-size: 0.98rem;
+    font-weight: 700;
+}
+.prompt-guide-description {
+    margin: 7px 0 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    opacity: 0.85;
+}
+.prompt-templates {
+    margin: 14px 0 18px;
+}
+.prompt-templates-title {
+    margin: 0 0 9px;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+.prompt-template-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.prompt-template {
+    border: 1px solid var(--border, #303750);
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    cursor: pointer;
+}
+.prompt-template:hover {
+    background: rgba(125, 145, 210, 0.12);
+}
+/* Assistente guiado de prompts */
+.guided-prompt {
+    margin: 16px 0;
+    padding: 16px;
+    border: 1px solid var(--border, #303750);
+    border-radius: 14px;
+    background: rgba(125, 145, 210, 0.06);
+}
+.guided-prompt h3 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+.guided-prompt-intro {
+    margin: 0 0 14px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    opacity: 0.85;
+}
+.guided-prompt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+.guided-prompt-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.guided-prompt-field label {
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+.guided-prompt-field input,
+.guided-prompt-field select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid var(--border, #303750);
+    border-radius: 9px;
+    background: var(--input-bg, transparent);
+    color: inherit;
+    font: inherit;
+}
+.guided-prompt-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 14px;
+}
+.guided-prompt-button {
+    border: 1px solid var(--border, #303750);
+    border-radius: 9px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font: inherit;
+}
+.guided-prompt-button-primary {
+    font-weight: 700;
+}
+.guided-prompt-status {
+    margin: 10px 0 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+@media (max-width: 560px) {
+    .guided-prompt-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.counter {
             margin-top: 8px;
             color: var(--muted);
             text-align: right;
@@ -549,13 +665,113 @@
                 <label for="prompt">O que você quer criar?</label>
                 <textarea
                     id="prompt"
-                    maxlength="1500"
+                    maxlength="1200"
                     placeholder="Exemplo: Um cavalo marrom de corpo inteiro correndo em um campo verde ao pôr do sol, fotografia realista..."
                     aria-describedby="contador"
                 ></textarea>
-                <div id="contador" class="counter">0 / 1500 caracteres</div>
+                <div id="contador" class="counter">0 / 1200 caracteres</div>
 
-                <div class="examples-title">Experimente um exemplo</div>
+                <section class="prompt-guide" aria-labelledby="promptGuideTitle">
+    <h3 class="prompt-guide-title" id="promptGuideTitle">Como criar um bom prompt</h3>
+    <p class="prompt-guide-description">
+        Descreva o que deseja ver, as características principais, o ambiente,
+        a iluminação e o estilo da imagem. Seja específico e evite instruções contraditórias.
+    </p>
+    <p class="prompt-guide-description">
+        <strong>Exemplo:</strong> Um cavalo marrom de corpo inteiro em um campo verde,
+        quatro patas visíveis, luz natural suave e fotografia realista.
+    </p>
+</section>
+
+<section class="prompt-templates" aria-labelledby="promptTemplatesTitle">
+    <h3 class="prompt-templates-title" id="promptTemplatesTitle">Aprimore seu prompt</h3>
+    <div class="prompt-template-list">
+        <button type="button" class="prompt-template" data-template="corpo inteiro, sujeito totalmente visível dentro do enquadramento">Corpo inteiro</button>
+        <button type="button" class="prompt-template" data-template="anatomia natural, proporções corretas, sem membros ou objetos duplicados">Anatomia correta</button>
+        <button type="button" class="prompt-template" data-template="iluminação natural suave, sombras coerentes e detalhes nítidos">Luz natural</button>
+        <button type="button" class="prompt-template" data-template="composição equilibrada, sujeito principal em destaque e fundo organizado">Melhor composição</button>
+        <button type="button" class="prompt-template" data-template="fotografia realista, texturas naturais e perspectiva coerente">Foto realista</button>
+        <button type="button" class="prompt-template" data-template="fundo simples, sem objetos desnecessários">Fundo simples</button>
+    </div>
+    <p id="promptTemplateStatus" class="prompt-guide-description" aria-live="polite">
+        Selecione uma sugestão para acrescentá-la à descrição.
+    </p>
+</section>
+<section class="guided-prompt" id="assistentePromptGuiado"
+         aria-labelledby="assistentePromptTitulo">
+    <h3 id="assistentePromptTitulo">Assistente de criação guiada</h3>
+    <p class="guided-prompt-intro">
+        Informe o tema e escolha as características da imagem.
+        Vamos montar uma sugestão para você revisar antes de gerar.
+    </p>
+
+    <div class="guided-prompt-grid">
+        <div class="guided-prompt-field">
+            <label for="guidedSubject">O que deseja criar?</label>
+            <input id="guidedSubject" type="text" maxlength="300"
+                   placeholder="Ex.: um cavalo marrom">
+        </div>
+
+        <div class="guided-prompt-field">
+            <label for="guidedStyle">Estilo da imagem</label>
+            <select id="guidedStyle">
+                <option value="fotografia realista">Fotografia realista</option>
+                <option value="ilustração digital detalhada">Ilustração digital</option>
+                <option value="pintura artística">Pintura artística</option>
+                <option value="arte em estilo de tatuagem">Tatuagem artística</option>
+                <option value="arte conceitual">Arte conceitual</option>
+            </select>
+        </div>
+
+        <div class="guided-prompt-field">
+            <label for="guidedFraming">Enquadramento</label>
+            <select id="guidedFraming">
+                <option value="corpo inteiro, sujeito totalmente visível">Corpo inteiro</option>
+                <option value="retrato aproximado, foco no rosto">Retrato</option>
+                <option value="vista ampla mostrando o ambiente">Vista ampla</option>
+                <option value="plano médio, sujeito em destaque">Plano médio</option>
+            </select>
+        </div>
+
+        <div class="guided-prompt-field">
+            <label for="guidedLighting">Iluminação</label>
+            <select id="guidedLighting">
+                <option value="iluminação natural suave">Luz natural suave</option>
+                <option value="luz dourada do pôr do sol">Pôr do sol</option>
+                <option value="iluminação de estúdio equilibrada">Luz de estúdio</option>
+                <option value="iluminação cinematográfica">Luz cinematográfica</option>
+            </select>
+        </div>
+
+        <div class="guided-prompt-field">
+            <label for="guidedBackground">Fundo e ambiente</label>
+            <select id="guidedBackground">
+                <option value="fundo simples e organizado">Fundo simples</option>
+                <option value="ambiente natural coerente com o tema">Ambiente natural</option>
+                <option value="cenário urbano detalhado">Cenário urbano</option>
+                <option value="fundo branco limpo">Fundo branco</option>
+                <option value="cenário de estúdio profissional">Estúdio profissional</option>
+            </select>
+        </div>
+
+        <div class="guided-prompt-field">
+            <label for="guidedDetails">Detalhe adicional (opcional)</label>
+            <input id="guidedDetails" type="text" maxlength="300"
+                   placeholder="Ex.: árvores ao fundo">
+        </div>
+    </div>
+
+    <div class="guided-prompt-actions">
+        <button type="button" class="guided-prompt-button guided-prompt-button-primary"
+                id="guidedBuildPrompt">Montar descrição</button>
+        <button type="button" class="guided-prompt-button"
+                id="guidedClearPrompt">Limpar campos</button>
+    </div>
+    <p id="guidedPromptStatus" class="guided-prompt-status" aria-live="polite">
+        A descrição será colocada no campo de prompt para você revisar.
+    </p>
+</section>
+<div class="examples-title">Experimente um exemplo</div>
                 <div class="examples">
                     <button type="button" class="example" data-prompt="Uma girafa de corpo inteiro na savana africana, árvores ao fundo, luz natural, fotografia de vida selvagem">🦒 Girafa na savana</button>
                     <button type="button" class="example" data-prompt="Um SUV rosa com um laço rosa elegante no capô, carro inteiro visível, fotografia realista em estúdio">🚙 SUV rosa</button>
@@ -682,7 +898,7 @@
 
         campoPrompt.addEventListener("input", () => {
             document.getElementById("contador").textContent =
-                `${campoPrompt.value.length} / 1500 caracteres`;
+                `${campoPrompt.value.length} / 1200 caracteres`;
         });
 
         document.querySelectorAll(".example").forEach((botao) => {
@@ -693,7 +909,102 @@
             });
         });
 
-        function mostrarStatus(mensagem, tipo = "") {
+        document.querySelectorAll(".prompt-template").forEach((botao) => {
+    botao.addEventListener("click", () => {
+        const complemento = (botao.dataset.template || "").trim();
+        const campo = document.getElementById("prompt");
+        const status = document.getElementById("promptTemplateStatus");
+
+        if (!campo || !complemento || !status) return;
+
+        const atual = campo.value.trim();
+        const partes = atual.split(/[,.;]+/).map(
+            (parte) => parte.trim().toLocaleLowerCase()
+        );
+
+        if (partes.includes(complemento.toLocaleLowerCase())) {
+            status.textContent = "Essa sugestão já parece estar no seu prompt.";
+            campo.focus();
+            return;
+        }
+
+        const textoLimpo = atual.replace(/[,.;\s]+$/, "");
+        const novoTexto = textoLimpo
+            ? `${textoLimpo}, ${complemento}`
+            : complemento;
+
+        if (novoTexto.length > 1200) {
+            status.textContent = "O prompt atingiria o limite de 1200 caracteres. Remova parte do texto primeiro.";
+            return;
+        }
+
+        campo.value = novoTexto;
+        campo.dispatchEvent(new Event("input", { bubbles: true }));
+        status.textContent = "Sugestão adicionada. Você pode editar o texto antes de gerar.";
+        campo.focus();
+    });
+});
+(() => {
+    const assunto = document.getElementById("guidedSubject");
+    const estilo = document.getElementById("guidedStyle");
+    const enquadramento = document.getElementById("guidedFraming");
+    const iluminacao = document.getElementById("guidedLighting");
+    const ambiente = document.getElementById("guidedBackground");
+    const detalhes = document.getElementById("guidedDetails");
+    const campoPrompt = document.getElementById("prompt");
+    const status = document.getElementById("guidedPromptStatus");
+    const montar = document.getElementById("guidedBuildPrompt");
+    const limpar = document.getElementById("guidedClearPrompt");
+
+    if (!assunto || !estilo || !enquadramento || !iluminacao ||
+        !ambiente || !detalhes || !campoPrompt || !status ||
+        !montar || !limpar) return;
+
+    montar.addEventListener("click", () => {
+        const tema = assunto.value.trim();
+
+        if (!tema) {
+            status.textContent = "Digite o que deseja criar antes de montar a descrição.";
+            assunto.focus();
+            return;
+        }
+
+        const partes = [
+            tema,
+            enquadramento.value,
+            estilo.value,
+            iluminacao.value,
+            ambiente.value
+        ];
+
+        const extra = detalhes.value.trim();
+        if (extra) partes.push(extra);
+
+        const descricao = partes.join(", ");
+
+        if (descricao.length > 1200) {
+            status.textContent = "A descrição ultrapassa 1200 caracteres. Reduza os detalhes.";
+            return;
+        }
+
+        campoPrompt.value = descricao;
+        campoPrompt.dispatchEvent(new Event("input", { bubbles: true }));
+        status.textContent = "Descrição montada! Revise ou personalize o texto antes de gerar a imagem.";
+        campoPrompt.focus();
+    });
+
+    limpar.addEventListener("click", () => {
+        assunto.value = "";
+        detalhes.value = "";
+        estilo.selectedIndex = 0;
+        enquadramento.selectedIndex = 0;
+        iluminacao.selectedIndex = 0;
+        ambiente.selectedIndex = 0;
+        status.textContent = "Campos do assistente limpos. O prompt atual foi preservado.";
+        assunto.focus();
+    });
+})();
+function mostrarStatus(mensagem, tipo = "") {
             statusEl.style.display = "block";
             statusEl.className = "status" + (tipo ? " " + tipo : "");
             statusEl.textContent = mensagem;

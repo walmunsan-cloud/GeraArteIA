@@ -1,0 +1,239 @@
+﻿from pathlib import Path
+from datetime import datetime
+import shutil
+import os
+import py_compile
+
+root = Path.cwd()
+target = root / "modal_app.py"
+source = target.read_text(encoding="utf-8")
+
+old_import = "    from app.learning_memory import LearningMemory\n"
+new_import = old_import + (
+    "    from app.correction_engine import CorrectionEngine, CorrectionEngineError\n"
+)
+
+anchor = '''    @web.get("/outputs/{filename}")
+    def output(filename: str, request: Request):
+'''
+
+route = '''    @web.post("/api/autocorrecao/{request_id}/analisar")
+    def analisar_autocorrecao(request_id: str, request: Request):
+        visitor_id = request.state.visitor_id
+
+        # Reserva a tentativa antes da chamada externa, evitando concorrencia.
+        with sqlite3.connect(DB_PATH, timeout=30) as con:
+            con.row_factory = sqlite3.Row
+            con.execute("BEGIN IMMEDIATE")
+
+            item = con.execute(
+                """SELECT cr.id, cr.status, cr.attempts_used,
+                          g.id AS generation_id, g.prompt,
+                          g.rating, g.satisfaction_pct, g.feedback,
+                          g.flagged_bad
+                   FROM correction_requests cr
+                   JOIN generations g
+                     ON g.id = cr.original_generation_id
+                   WHERE cr.id = ?
+                     AND cr.visitor_id = ?
+                     AND g.visitor_id = ?""",
+                (request_id, visitor_id, visitor_id)
+            ).fetchone()
+
+            if item is None:
+                raise HTTPException(404, "Solicitação não encontrada.")
+
+            if item["status"] not in ("disponivel", "erro"):
+                raise HTTPException(
+                    409, "Esta solicitação não está disponível para análise."
+                )
+
+            if item["attempts_used"] >= 2:
+                con.execute(
+                    """UPDATE correction_requests
+                       SET status='limite_atingido',
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND visitor_id=?""",
+                    (request_id, visitor_id)
+                )
+                con.commit()
+                raise HTTPException(429, "Limite de duas tentativas atingido.")
+
+            if not item["flagged_bad"]:
+                raise HTTPException(
+                    400, "A geração não possui avaliação negativa."
+                )
+
+            try:
+                rating = int(item["rating"])
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    400, "A geração precisa ter uma avaliação válida."
+                )
+
+            attempt = item["attempts_used"] + 1
+            history_id = uuid4().hex
+
+            con.execute(
+                """UPDATE correction_requests
+                   SET status='analisando', attempts_used=?,
+                       updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND visitor_id=?""",
+                (attempt, request_id, visitor_id)
+            )
+
+            con.execute(
+                """INSERT INTO correction_history
+                   (id, request_id, attempt_number, status, original_prompt)
+                   VALUES (?, ?, ?, 'proposta', ?)""",
+                (history_id, request_id, attempt, item["prompt"])
+            )
+            con.commit()
+
+            original_prompt = item["prompt"]
+            satisfaction_pct = item["satisfaction_pct"]
+            feedback = item["feedback"] or ""
+
+        try:
+            # A memoria e inicializada somente nesta solicitacao explicita.
+            memory = get_learning_memory()
+            engine = CorrectionEngine(memory=memory)
+
+            proposal = engine.prepare_correction(
+                prompt=original_prompt,
+                rating=rating,
+                satisfaction_pct=satisfaction_pct,
+                feedback=feedback,
+                user_id=visitor_id,
+                category="geral",
+                image_data_url=None
+            )
+
+            analysis = proposal.get("analysis")
+            proposed_prompt = proposal.get("proposed_prompt")
+
+            if not isinstance(analysis, dict) or not isinstance(
+                proposed_prompt, str
+            ) or not proposed_prompt.strip():
+                raise ValueError("A proposta retornada é inválida.")
+
+            analysis_json = json.dumps(
+                analysis, ensure_ascii=False
+            )
+
+            with sqlite3.connect(DB_PATH, timeout=30) as con:
+                con.execute(
+                    """UPDATE correction_history
+                       SET status='proposta',
+                           proposed_prompt=?,
+                           analysis_json=?,
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND request_id=?
+                         AND EXISTS (
+                             SELECT 1 FROM correction_requests
+                             WHERE id=? AND visitor_id=?
+                         )""",
+                    (
+                        proposed_prompt.strip(), analysis_json,
+                        history_id, request_id, request_id, visitor_id
+                    )
+                )
+
+                con.execute(
+                    """UPDATE correction_requests
+                       SET status='aguardando_aprovacao',
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND visitor_id=? AND status='analisando'""",
+                    (request_id, visitor_id)
+                )
+                con.commit()
+
+            return {
+                "ok": True,
+                "request_id": request_id,
+                "history_id": history_id,
+                "attempt": attempt,
+                "max_attempts": 2,
+                "status": "aguardando_aprovacao",
+                "analysis": analysis,
+                "proposed_prompt": proposed_prompt.strip(),
+                "approved": False
+            }
+
+        except Exception as exc:
+            print(
+                "[GeraArteIA] autocorrecao falhou: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+            with sqlite3.connect(DB_PATH, timeout=30) as con:
+                con.execute(
+                    """UPDATE correction_history
+                       SET status='erro',
+                           analysis_json=?,
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND request_id=?""",
+                    (
+                        json.dumps(
+                            {"erro": type(exc).__name__},
+                            ensure_ascii=False
+                        ),
+                        history_id, request_id
+                    )
+                )
+
+                next_status = (
+                    "limite_atingido" if attempt >= 2 else "erro"
+                )
+
+                con.execute(
+                    """UPDATE correction_requests
+                       SET status=?, updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND visitor_id=?""",
+                    (next_status, request_id, visitor_id)
+                )
+                con.commit()
+
+            raise HTTPException(
+                503,
+                "Não foi possível concluir a análise. "
+                "Verifique a configuração da integração e tente novamente, "
+                "se ainda houver tentativas disponíveis."
+            ) from exc
+
+''' + anchor
+
+if source.count(old_import) != 1:
+    raise SystemExit("ERRO: import LearningMemory nao encontrado uma unica vez.")
+
+if source.count(anchor) != 1:
+    raise SystemExit("ERRO: ponto de insercao da rota output nao encontrado.")
+
+if "/api/autocorrecao/{request_id}/analisar" in source:
+    raise SystemExit("ERRO: rota de analise ja existe.")
+
+updated = source.replace(old_import, new_import, 1)
+updated = updated.replace(anchor, route, 1)
+
+backup_dir = root / "backups"
+backup_dir.mkdir(exist_ok=True)
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup = backup_dir / f"modal_app_antes_rota_analise_{stamp}.py"
+temp = target.with_name(target.name + ".tmp")
+
+shutil.copy2(target, backup)
+
+try:
+    temp.write_text(updated, encoding="utf-8", newline="")
+    os.replace(temp, target)
+    py_compile.compile(str(target), doraise=True)
+except Exception:
+    if temp.exists():
+        temp.unlink()
+    shutil.copy2(backup, target)
+    raise
+
+print("ROTA DE ANALISE INSERIDA; PY_COMPILE OK")
+print(f"Backup: {backup}")
+print(f"Arquivo: {target}")
+print(f"Tamanho: {target.stat().st_size} bytes")

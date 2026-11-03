@@ -1,0 +1,71 @@
+﻿from pathlib import Path
+from datetime import datetime
+import shutil
+import os
+import py_compile
+import sys
+
+root = Path.cwd()
+target = root / "modal_app.py"
+
+source = target.read_text(encoding="utf-8")
+
+old_import = "    from app.prompt_optimizer import PromptOptimizer\n"
+new_import = (
+    old_import
+    + "    from app.learning_memory import LearningMemory\n"
+)
+
+old_anchor = '    pipeline_cache = {"pipe": None}\n\n    def get_pipe():\n'
+new_anchor = '''    pipeline_cache = {"pipe": None}
+
+    # MEMORIA_SOB_DEMANDA_V1
+    # A instancia so e criada quando uma rota de autocorrecao solicitar.
+    # O construtor inicializa as tabelas; por isso nao e chamado no startup.
+    learning_memory_cache = {"instance": None}
+
+    def get_learning_memory():
+        if learning_memory_cache["instance"] is None:
+            learning_memory_cache["instance"] = LearningMemory(DB_PATH)
+        return learning_memory_cache["instance"]
+    # FIM MEMORIA_SOB_DEMANDA_V1
+
+    def get_pipe():
+'''
+
+if source.count(old_import) != 1:
+    raise SystemExit("ERRO: import PromptOptimizer nao encontrado uma unica vez.")
+
+if source.count(old_anchor) != 1:
+    raise SystemExit("ERRO: ponto de insercao do cache nao encontrado uma unica vez.")
+
+if "MEMORIA_SOB_DEMANDA_V1" in source:
+    raise SystemExit("ERRO: marcador da memoria ja existe. Patch cancelado.")
+
+updated = source.replace(old_import, new_import, 1)
+updated = updated.replace(old_anchor, new_anchor, 1)
+
+backup_dir = root / "backups"
+backup_dir.mkdir(exist_ok=True)
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup = backup_dir / f"modal_app_antes_memoria_sob_demanda_{stamp}.py"
+temp = target.with_name(target.name + ".tmp")
+
+shutil.copy2(target, backup)
+
+try:
+    temp.write_text(updated, encoding="utf-8", newline="")
+    os.replace(temp, target)
+
+    py_compile.compile(str(target), doraise=True)
+
+except Exception:
+    if temp.exists():
+        temp.unlink()
+    shutil.copy2(backup, target)
+    raise
+
+print("PATCH APLICADO E COMPILACAO ESTATICA OK")
+print(f"Backup: {backup}")
+print(f"Arquivo: {target}")
+print(f"Tamanho: {target.stat().st_size} bytes")

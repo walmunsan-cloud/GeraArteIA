@@ -1,4 +1,4 @@
-# 🎨 GeraArteIA — Geração de Imagens por Difusão
+﻿# 🎨 GeraArteIA — Geração de Imagens por Difusão
 
 ![Status](https://img.shields.io/badge/status-funcionando-success)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
@@ -10,7 +10,7 @@
 
 ### 🚀 GERADOR DE IMAGENS ONLINE
 
-**[👉 CLIQUE AQUI PARA ACESSAR O GERADOR](https://walmunsan-cloud--geraarteia-web.modal.run)**
+**[👉 CLIQUE AQUI PARA ACESSAR O GERADOR](https://walmunsan-cloud--geraarteia-tcc-asgi-fastapi-app.us-east.modal.run)**
 
 > O sistema está hospedado no Modal e pode ser acessado diretamente pelo navegador, sem necessidade de instalar Python, abrir Google Colab ou executar programas localmente.
 
@@ -573,3 +573,4 @@ O tempo de execução da GPU deve ser considerado durante a utilização da apli
 **Luan Jesus Pereira Gomes**
 
 🎨 **GeraArteIA — Geração de Imagens por Difusão**
+

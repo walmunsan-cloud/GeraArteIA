@@ -329,7 +329,7 @@ O usuário não precisa instalar o projeto ou abrir o Google Colab para utilizar
 
 ### Link da aplicação:
 
-**https://walmunsan-cloud--geraarteia-web.modal.run**
+**https://walmunsan-cloud--geraarteia-tcc-asgi-fastapi-app.us-east.modal.run**
 
 ### Repositório:
 
@@ -343,7 +343,7 @@ Para utilizar o GeraArteIA:
 
 ### 1. Acesse:
 
-https://walmunsan-cloud--geraarteia-web.modal.run
+https://walmunsan-cloud--geraarteia-tcc-asgi-fastapi-app.us-east.modal.run
 
 ### 2. Digite uma descrição
 
@@ -558,7 +558,7 @@ O tempo de execução da GPU deve ser considerado durante a utilização da apli
 
 ### 🌐 Aplicação online
 
-**https://walmunsan-cloud--geraarteia-web.modal.run**
+**https://walmunsan-cloud--geraarteia-tcc-asgi-fastapi-app.us-east.modal.run**
 
 ### 💻 GitHub
 
